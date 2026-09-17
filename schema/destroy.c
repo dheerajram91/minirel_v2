@@ -42,7 +42,42 @@
 
 #define DELETE_ARG_COUNT 5
 
+static int DestroyUnlocked(int argc, char **argv);
+
 int Destroy(int argc, char **argv) {
+    if (argc < 2 || g_DBOpenFlag != OK) {
+        return DestroyUnlocked(argc, argv);
+    }
+
+    int tableLock = AcquireManagedTableLock(argv[1], LOCK_EXCLUSIVE);
+    if (tableLock == NOTOK) {
+        return ReportLockFailure();
+    }
+    int openRelNum = FindRelNum(argv[1]);
+    if (openRelNum != NOTOK && CloseRel(openRelNum) != OK) {
+        ReleaseManagedLock(tableLock);
+        return NOTOK;
+    }
+    int catalogLock = AcquireManagedCatalogLock(LOCK_EXCLUSIVE);
+    if (catalogLock == NOTOK) {
+        ReleaseManagedLock(tableLock);
+        return ReportLockFailure();
+    }
+
+    if (RefreshCatalogCaches() != OK) {
+        ReleaseManagedLock(catalogLock);
+        ReleaseManagedLock(tableLock);
+        return NOTOK;
+    }
+    int result = DestroyUnlocked(argc, argv);
+    FlushPage(ATTRCAT_CACHE);
+    FlushPage(RELCAT_CACHE);
+    ReleaseManagedLock(catalogLock);
+    ReleaseManagedLock(tableLock);
+    return result;
+}
+
+static int DestroyUnlocked(int argc, char **argv) {
     if (g_DBOpenFlag != OK) {
         return ErrorMsgs(DB_NOT_OPEN, g_PrintFlag);
     }
@@ -57,6 +92,9 @@ int Destroy(int argc, char **argv) {
         return ErrorMsgs(METADATA_SECURITY, g_PrintFlag);
     }
 
+    if (WalLogDrop(argv[1]) != OK) {
+        return ErrorMsgs(WAL_WRITE_ERROR, g_PrintFlag);
+    }
     if (remove(argv[1]) != 0) {
         return ErrorMsgs(RELNOEXIST, g_PrintFlag);
     } /* File deletion failed*/

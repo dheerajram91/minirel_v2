@@ -82,6 +82,10 @@
 #define HELP		218
 #define BUILDINDEX	219
 #define DROPINDEX	220
+#define BEGINTRANSACTION 221
+#define COMMITTRANSACTION 222
+#define ROLLBACKTRANSACTION 223
+#define UPDATE 224
 
 #define ON		301		/* other reserved words */
 #define	KEY		302
@@ -94,6 +98,10 @@
 #define AND		309
 #define FOR		310
 #define UNIQUE		311
+#define NOT		312
+#define NULLTOKEN	313
+#define PRIMARY		314
+#define SET		315
 
 #define	ONE		1		/* action codes */
 #define	DONE		0
@@ -103,6 +111,8 @@
 #define INC		-5
 #define INC2		-6
 #define MARKUNIQUE	-7
+#define MARKNOTNULL	-8
+#define MARKPRIMARY	-9
 
 #define RESULTARG	1		/* arguments position		      */
 #define	STDARG		2

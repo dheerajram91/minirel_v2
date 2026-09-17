@@ -14,6 +14,8 @@ typedef struct buffer{
     short pid;
     bool dirty;
     Page page;
+    char beforeImage[PAGESIZE];
+    bool beforeImageValid;
 }Buffer;
 
 #endif /* BUFFER_H_ */

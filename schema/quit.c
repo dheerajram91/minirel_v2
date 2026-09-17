@@ -36,6 +36,9 @@ void Quit(int argc, char **argv) {
 
     strcpy(closeDBArguments[0], "closedb");
 
+    if (TransactionIsActive() == TRUE)
+        RollbackTransaction(0, NULL);
+
     if (g_DBOpenFlag == OK)
         CloseDB(1, closeDBArguments);
 
@@ -43,4 +46,3 @@ void Quit(int argc, char **argv) {
     free(closeDBArguments);
 
 }
-

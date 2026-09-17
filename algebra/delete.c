@@ -63,7 +63,7 @@ int Delete(int argc, char **argv) {
         return ErrorMsgs(METADATA_SECURITY, g_PrintFlag);
     }
 
-    if (OpenRel(argv[1]) == NOTOK)
+    if (OpenRelWithLock(argv[1], LOCK_EXCLUSIVE) == NOTOK)
         return ErrorMsgs(RELNOEXIST, g_PrintFlag);
     /* Finding the relNum of Relation */
     relNum = FindRelNum(argv[1]);

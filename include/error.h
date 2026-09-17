@@ -45,6 +45,15 @@
 #define INSUFFICIENT_ATTRS          135     /* Number of attributes passed is less */
 #define ATTR_REPEATED               136     /* Insert received same attribute more than once*/
 #define UNIQUE_CONSTRAINT_VIOLATION 137     /* A value already exists for a unique attribute */
+#define MULTIPLE_PRIMARY_KEYS       138     /* Relation declares more than one primary key */
+#define PRIMARY_KEY_VIOLATION       139     /* A primary key value already exists */
+#define TRANSACTION_ACTIVE          140     /* Tried to begin or close with an active transaction */
+#define NO_ACTIVE_TRANSACTION       141     /* Commit or rollback without begin */
+#define TRANSACTION_ROLLBACK_FAILED 142     /* Rollback could not restore before-images */
+#define LOCK_TIMEOUT                143     /* Timed out waiting for a transaction lock */
+#define TRANSACTION_ABORTED         144     /* Commit converted to rollback after transaction failure */
+#define WAL_WRITE_ERROR             145     /* WAL append or force failed */
+#define WAL_RECOVERY_ERROR          146     /* WAL recovery failed */
 
 int ErrorMsgs(int errorId, int printFlag);
 

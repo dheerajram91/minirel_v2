@@ -5,28 +5,50 @@
 #include <string.h>
 
 const CatalogAttributeDefinition RELCAT_SCHEMA[RELCAT_ATTRIBUTE_COUNT] = {
-    { "relName", RELCAT_RELNAME_OFFSET, RELNAME, STRING, FALSE },
-    { "recLength", RELCAT_RECLENGTH_OFFSET, sizeof(int), INTEGER, FALSE },
-    { "recsPerPg", RELCAT_RECSPERPG_OFFSET, sizeof(int), INTEGER, FALSE },
-    { "numAttrs", RELCAT_NUMATTRS_OFFSET, sizeof(int), INTEGER, FALSE },
-    { "numRecs", RELCAT_NUMRECS_OFFSET, sizeof(int), INTEGER, FALSE },
-    { "numPgs", RELCAT_NUMPGS_OFFSET, sizeof(int), INTEGER, FALSE }
+    { "relName", RELCAT_RELNAME_OFFSET, RELNAME, STRING, FALSE, FALSE, FALSE },
+    { "recLength", RELCAT_RECLENGTH_OFFSET, sizeof(int), INTEGER, FALSE, FALSE, FALSE },
+    { "recsPerPg", RELCAT_RECSPERPG_OFFSET, sizeof(int), INTEGER, FALSE, FALSE, FALSE },
+    { "numAttrs", RELCAT_NUMATTRS_OFFSET, sizeof(int), INTEGER, FALSE, FALSE, FALSE },
+    { "numRecs", RELCAT_NUMRECS_OFFSET, sizeof(int), INTEGER, FALSE, FALSE, FALSE },
+    { "numPgs", RELCAT_NUMPGS_OFFSET, sizeof(int), INTEGER, FALSE, FALSE, FALSE }
 };
 
 const CatalogAttributeDefinition ATTRCAT_SCHEMA[ATTRCAT_ATTRIBUTE_COUNT] = {
-    { "offset", ATTRCAT_OFFSET_OFFSET, sizeof(int), INTEGER, FALSE },
-    { "length", ATTRCAT_LENGTH_OFFSET, sizeof(int), INTEGER, FALSE },
-    { "type", ATTRCAT_TYPE_OFFSET, sizeof(int), INTEGER, FALSE },
-    { "attrName", ATTRCAT_ATTRNAME_OFFSET, RELNAME, STRING, FALSE },
-    { "relName", ATTRCAT_RELNAME_OFFSET, RELNAME, STRING, FALSE }
+    { "offset", ATTRCAT_OFFSET_OFFSET, sizeof(int), INTEGER, FALSE, FALSE, FALSE },
+    { "length", ATTRCAT_LENGTH_OFFSET, sizeof(int), INTEGER, FALSE, FALSE, FALSE },
+    { "type", ATTRCAT_TYPE_OFFSET, sizeof(int), INTEGER, FALSE, FALSE, FALSE },
+    { "attrName", ATTRCAT_ATTRNAME_OFFSET, RELNAME, STRING, FALSE, FALSE, FALSE },
+    { "relName", ATTRCAT_RELNAME_OFFSET, RELNAME, STRING, FALSE, FALSE, FALSE }
 };
 
-int EncodeAttributeType(datatype type, bool unique) {
-    return type | (unique == TRUE ? UNIQUE_ATTRIBUTE_FLAG : 0);
+int EncodeAttributeType(datatype type, bool unique, bool notNull, bool primaryKey) {
+    int flags = 0;
+    if (primaryKey == TRUE) {
+        unique = TRUE;
+        notNull = TRUE;
+    }
+    if (unique == TRUE)
+        flags |= UNIQUE_ATTRIBUTE_FLAG;
+    if (notNull == TRUE)
+        flags |= NOT_NULL_ATTRIBUTE_FLAG;
+    if (primaryKey == TRUE)
+        flags |= PRIMARY_KEY_ATTRIBUTE_FLAG;
+    return type | flags;
 }
 
-void DecodeAttributeType(int encodedType, datatype *type, bool *unique) {
+void DecodeAttributeType(
+        int encodedType,
+        datatype *type,
+        bool *unique,
+        bool *notNull,
+        bool *primaryKey) {
+    *primaryKey = (encodedType & PRIMARY_KEY_ATTRIBUTE_FLAG) != 0;
     *unique = (encodedType & UNIQUE_ATTRIBUTE_FLAG) != 0;
+    *notNull = (encodedType & NOT_NULL_ATTRIBUTE_FLAG) != 0;
+    if (*primaryKey == TRUE) {
+        *unique = TRUE;
+        *notNull = TRUE;
+    }
     *type = encodedType & ATTRIBUTE_TYPE_MASK;
 }
 
@@ -55,7 +77,11 @@ void EncodeAttrCatalogRecord(char *destination, const AttrCatalogRecord *record)
     convertIntToByteArray(record->offset, destination + ATTRCAT_OFFSET_OFFSET);
     convertIntToByteArray(record->length, destination + ATTRCAT_LENGTH_OFFSET);
     convertIntToByteArray(
-            EncodeAttributeType(record->type, record->unique),
+            EncodeAttributeType(
+                    record->type,
+                    record->unique,
+                    record->notNull,
+                    record->primaryKey),
             destination + ATTRCAT_TYPE_OFFSET);
     strncpy(destination + ATTRCAT_ATTRNAME_OFFSET, record->attrName, RELNAME);
     strncpy(destination + ATTRCAT_RELNAME_OFFSET, record->relName, RELNAME);
@@ -68,7 +94,12 @@ void DecodeAttrCatalogRecord(const char *source, AttrCatalogRecord *record) {
     record->offset = readIntFromByteArray(source, ATTRCAT_OFFSET_OFFSET);
     record->length = readIntFromByteArray(source, ATTRCAT_LENGTH_OFFSET);
     encodedType = readIntFromByteArray(source, ATTRCAT_TYPE_OFFSET);
-    DecodeAttributeType(encodedType, &record->type, &record->unique);
+    DecodeAttributeType(
+            encodedType,
+            &record->type,
+            &record->unique,
+            &record->notNull,
+            &record->primaryKey);
     strncpy(record->attrName, source + ATTRCAT_ATTRNAME_OFFSET, RELNAME);
     strncpy(record->relName, source + ATTRCAT_RELNAME_OFFSET, RELNAME);
 }
@@ -98,6 +129,8 @@ struct attrCatalog* BuildAttributeCatalog(
         node->length = schema[i].length;
         node->type = schema[i].type;
         node->unique = schema[i].unique;
+        node->notNull = schema[i].notNull;
+        node->primaryKey = schema[i].primaryKey;
         strncpy(node->attrName, schema[i].name, RELNAME);
         strncpy(node->relName, relationName, RELNAME);
 

@@ -43,7 +43,7 @@ int Load(int argc, char **argv) {
         return ErrorMsgs(METADATA_SECURITY, g_PrintFlag);
     }
 
-    if (OpenRel(relName) == NOTOK) {
+    if (OpenRelWithLock(relName, LOCK_EXCLUSIVE) == NOTOK) {
         return NOTOK;
     }
 

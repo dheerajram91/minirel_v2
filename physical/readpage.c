@@ -45,10 +45,12 @@ int ReadPage(int relNum, short pid) {
         if (pid == g_CatCache[relNum].numPgs + 1) { //Trying to read a fresh page into buffer.
         //simply set the slotmap to show all records are free
             g_Buffer[relNum].page.slotmap = 0;
+            memset(g_Buffer[relNum].page.contents, 0, MAXRECORD);
+            memset(g_Buffer[relNum].beforeImage, 0, PAGESIZE);
         } else { //Seek the file and load data into buffer
             /* Calculating the offset */
             int offset = (pid - 1) * PAGESIZE;
-            char page[PAGESIZE];
+            char page[PAGESIZE] = { 0 };
 
             /*Seek in file */
             const int fd = g_CatCache[relNum].relFile;
@@ -62,13 +64,14 @@ int ReadPage(int relNum, short pid) {
             /*Copy the contents of page to buffer*/
             g_Buffer[relNum].page.slotmap = readIntFromByteArray(page, 0);
             memcpy(g_Buffer[relNum].page.contents, page + (PAGESIZE - MAXRECORD), MAXRECORD);
+            memcpy(g_Buffer[relNum].beforeImage, page, PAGESIZE);
         }
 
         /* set the dirty bits and pid */
         g_Buffer[relNum].pid = pid;
         g_Buffer[relNum].dirty = FALSE;
+        g_Buffer[relNum].beforeImageValid = TRUE;
 
     }
     return OK;
 }
-

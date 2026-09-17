@@ -18,6 +18,8 @@
 #include "findrec.h"
 #include "error.h"
 #include "catalog.h"
+#include "locking.h"
+#include "transaction.h"
 
 #include <stdio.h>
 #include <stdlib.h>

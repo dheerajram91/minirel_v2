@@ -1,4 +1,5 @@
 #include "../include/flushpage.h"
+#include "../include/wal.h"
 
 /**
  * Flush the open relation's buffer pool page. This involves writing the page to disk if it's
@@ -44,16 +45,27 @@ int FlushPage(int relNum) {
         int offset = (g_Buffer[relNum].pid - 1) * PAGESIZE;
 
         const int fd = g_CatCache[relNum].relFile;
+        if (g_Buffer[relNum].beforeImageValid == FALSE
+                || WalLogPage(
+                        g_CatCache[relNum].relName,
+                        g_Buffer[relNum].pid,
+                        g_Buffer[relNum].beforeImage,
+                        page) != OK) {
+            return ErrorMsgs(WAL_WRITE_ERROR, g_PrintFlag);
+        }
+        WalCrashPoint("after_wal_page");
         if (lseek(fd, offset, SEEK_SET) < 0) {
             return ErrorMsgs(FILE_SEEK_ERROR, g_PrintFlag);
         }
-        if (write(fd, page, PAGESIZE) < 0) {
+        if (write(fd, page, PAGESIZE) != PAGESIZE) {
             return ErrorMsgs(WRITE_DISK_ERROR, g_PrintFlag);
         }
+        WalCrashPoint("after_data_page");
     }
     g_Buffer[relNum].dirty = FALSE;
     g_Buffer[relNum].pid = 0;
     g_Buffer[relNum].page.slotmap = 0;
+    g_Buffer[relNum].beforeImageValid = FALSE;
 
     return OK;
 }

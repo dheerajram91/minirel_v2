@@ -16,6 +16,10 @@
 #include "insert.h"
 #include "destroy.h"
 #include "catalog.h"
+#include "catalogcache.h"
+#include "flushpage.h"
+#include "locking.h"
+#include "transaction.h"
 
 #include <stdio.h>
 #include <string.h>

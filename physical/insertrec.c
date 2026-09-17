@@ -56,8 +56,11 @@ int InsertRec(const int relNum, char*recPtr) {
                 if (attr->unique == TRUE
                         && memcmp(record + attr->offset, recPtr + attr->offset,
                                 attr->length) == 0) {
+                    int errorId = attr->primaryKey == TRUE
+                            ? PRIMARY_KEY_VIOLATION
+                            : UNIQUE_CONSTRAINT_VIOLATION;
                     free(fRid);
-                    return ErrorMsgs(UNIQUE_CONSTRAINT_VIOLATION, g_PrintFlag);
+                    return ErrorMsgs(errorId, g_PrintFlag);
                 }
             }
         }

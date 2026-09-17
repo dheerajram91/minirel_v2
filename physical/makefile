@@ -22,12 +22,12 @@ CFLAGS = -g $(DFLAG) -I$(INCLUDE)
 # "#ifdef" for more details
 
 SRCS = \
-	error.c catalog.c createcats.c opencats.c closecats.c openrel.c closerel.c findrelnum.c \
+	error.c catalog.c catalogcache.c locking.c transaction.c wal.c createcats.c opencats.c closecats.c openrel.c closerel.c findrelnum.c \
 	readpage.c flushpage.c writerec.c findrec.c getnextrec.c insertrec.c deleterec.c \
 	helpers.c
 
 OBJ = \
-	error.o catalog.o createcats.o opencats.o closecats.o openrel.o closerel.o findrelnum.o \
+	error.o catalog.o catalogcache.o locking.o transaction.o wal.o createcats.o opencats.o closecats.o openrel.o closerel.o findrelnum.o \
 	readpage.o flushpage.o writerec.o findrec.o getnextrec.o insertrec.o deleterec.o \
 	helpers.o
 
@@ -43,6 +43,10 @@ $(OBJ) : $(INCLUDE)/globals.h $(INCLUDE)/defs.h $(INCLUDE)/error.h
 
 error.o : $(INCLUDE)/error.h
 catalog.o : $(INCLUDE)/catalog.h
+catalogcache.o : $(INCLUDE)/catalogcache.h
+locking.o : $(INCLUDE)/locking.h
+transaction.o : $(INCLUDE)/transaction.h
+wal.o : $(INCLUDE)/wal.h
 createcats.o : $(INCLUDE)/createcats.h
 opencats.o : $(INCLUDE)/opencats.h $(INCLUDE)/catalog.h
 closecats.o : $(INCLUDE)/closecats.h

@@ -32,18 +32,31 @@
  */
 
 int CloseCats() {
-    int i;
+    int i, found;
 
     if (g_CacheInUse[0] == FALSE || g_CacheInUse[1] == FALSE)
         return NOTOK;
 
-    for (i = 2; i < MAXOPEN; i++)
-        if (g_CacheInUse[i] == TRUE)
-            CloseRel(i);
+    do {
+        found = FALSE;
+        for (i = 2; i < MAXOPEN; i++) {
+            if (g_CacheInUse[i] == TRUE) {
+                if (CloseRel(i) != OK) {
+                    return NOTOK;
+                }
+                found = TRUE;
+                break;
+            }
+        }
+    } while (found == TRUE);
     /* Closing Relation attrcat */
-    CloseRel(ATTRCAT_CACHE);
+    if (CloseRel(ATTRCAT_CACHE) != OK) {
+        return NOTOK;
+    }
     /* Closing Relation relcat */
-    CloseRel(RELCAT_CACHE);
+    if (CloseRel(RELCAT_CACHE) != OK) {
+        return NOTOK;
+    }
 
     return OK;
 }

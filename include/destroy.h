@@ -12,6 +12,13 @@
 #include "error.h"
 #include "globals.h"
 #include "delete.h"
+#include "catalogcache.h"
+#include "closerel.h"
+#include "flushpage.h"
+#include "findrelnum.h"
+#include "locking.h"
+#include "transaction.h"
+#include "wal.h"
 
 #include <stdio.h>
 #include <unistd.h>

@@ -41,14 +41,29 @@ int CloseRel(int relNum) {
     char *recPtr;
     RelCatalogRecord relationRecord;
     Rid startRid = { 1, 0 }, *foundRid;
+    int catalogLock = NOTOK;
 
     FlushPage(relNum);
 
-    if (g_CatCache[relNum].dirty == FALSE)
-        return OK;
-    else {
+    if (g_CatCache[relNum].dirty == TRUE) {
+        catalogLock = AcquireManagedCatalogLock(LOCK_EXCLUSIVE);
+        if (catalogLock == NOTOK) {
+            return ReportLockFailure();
+        }
+        if (relNum == ATTRCAT_CACHE
+                && RefreshCatalogCache(ATTRCAT_CACHE) != OK) {
+            ReleaseManagedLock(catalogLock);
+            return NOTOK;
+        }
+        if (RefreshCatalogCache(RELCAT_CACHE) != OK) {
+            ReleaseManagedLock(catalogLock);
+            return NOTOK;
+        }
         if (FindRec(RELCAT_CACHE, &startRid, &foundRid, &recPtr, STRING, RELNAME, 0,
                 g_CatCache[relNum].relName, EQ) == NOTOK) {
+            if (catalogLock != NOTOK) {
+                ReleaseManagedLock(catalogLock);
+            }
             return ErrorMsgs(RELNOEXIST, g_PrintFlag);
         } else {
             numPgs = g_CatCache[relNum].numPgs;
@@ -60,19 +75,29 @@ int CloseRel(int relNum) {
 
             WriteRec(RELCAT_CACHE, recPtr, foundRid);
             FlushPage(RELCAT_CACHE);
-
-            struct attrCatalog *temp, *attrListHead = g_CatCache[relNum].attrList;
             g_CatCache[relNum].dirty = FALSE;
-            g_CacheInUse[relNum] = FALSE;
-            close(g_CatCache[relNum].relFile);
-
-            temp = attrListHead;
-            while (temp != NULL) {
-                attrListHead = temp->next;
-                free(temp);
-                temp = attrListHead;
+            if (catalogLock != NOTOK) {
+                ReleaseManagedLock(catalogLock);
             }
         }
+    }
+
+    struct attrCatalog *temp, *attrListHead = g_CatCache[relNum].attrList;
+    g_CacheInUse[relNum] = FALSE;
+    close(g_CatCache[relNum].relFile);
+
+    temp = attrListHead;
+    while (temp != NULL) {
+        attrListHead = temp->next;
+        free(temp);
+        temp = attrListHead;
+    }
+    g_CatCache[relNum].attrList = NULL;
+
+    if (relNum >= 2 && g_CatCache[relNum].lockId != NOTOK) {
+        ReleaseManagedLock(g_CatCache[relNum].lockId);
+        g_CatCache[relNum].lockId = NOTOK;
+        g_CatCache[relNum].lockMode = LOCK_NONE;
     }
     return OK;
 }

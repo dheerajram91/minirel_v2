@@ -17,6 +17,9 @@
 #include "findrec.h" 
 #include "closerel.h"
 #include "catalog.h"
+#include "catalogcache.h"
+#include "locking.h"
+#include "transaction.h"
 
 #include <string.h>
 #include <stdio.h>
@@ -24,5 +27,6 @@
 #include <fcntl.h>
 
 int OpenRel(char* RelName);
+int OpenRelWithLock(char *relName, LockMode mode);
 
 #endif /* OPENREL_H_ */

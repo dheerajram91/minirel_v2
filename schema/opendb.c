@@ -6,6 +6,7 @@
  */
 
 #include "../include/opendb.h"
+#include "../include/wal.h"
 
 /*
  * Function: OpenDB()
@@ -54,11 +55,17 @@ int OpenDB(int argc, char **argv) {
 
         getcwd(g_InvokedDirectory, MAXPATH);
 
-        g_DBOpenFlag = OK;
-
         chdir(argv[1]);
 
+        if (WalOpenDatabase() == NOTOK) {
+            chdir(g_InvokedDirectory);
+            return ErrorMsgs(WAL_RECOVERY_ERROR, g_PrintFlag);
+        }
+        g_DBOpenFlag = OK;
         if (OpenCats() == NOTOK) {
+            g_DBOpenFlag = NOTOK;
+            WalCloseDatabase();
+            chdir(g_InvokedDirectory);
             g_PrintFlag = NOTOK;
             return NOTOK;
         }
@@ -69,4 +76,3 @@ int OpenDB(int argc, char **argv) {
 
     return OK;
 }
-

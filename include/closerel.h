@@ -16,6 +16,8 @@
 #include "findrec.h"
 #include "writerec.h"
 #include "catalog.h"
+#include "catalogcache.h"
+#include "transaction.h"
 
 #include <stdio.h>
 #include <unistd.h>

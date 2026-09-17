@@ -12,7 +12,7 @@ typedef struct {			/* parser table entry		      */
 } PARSER_TABLE;
 
 
-PARSER_TABLE table [21] [20] = {
+PARSER_TABLE table [24] [24] = {
 {   	{   	0, 	CREATEDB, 	EAT1, 		0	},
     	{	1, 	STR, 		EAT1, 		0	},
     	{	1, 	SEMI, 		DONE, 		0	}	},
@@ -30,11 +30,13 @@ PARSER_TABLE table [21] [20] = {
     	{	1, 	STR, 		EAT1, 		0	},
     	{	1, 	EQOP, 		THROW, 		0	},
     	{	1, 	STR, 		EAT1, 		0	},
-	{	1, 	UNIQUE,		MARKUNIQUE,	9	},
+	{	1, 	UNIQUE,		MARKUNIQUE,	6	},
+	{	0, 	NOT,		THROW,		11	},
+	{	0, 	PRIMARY,	THROW,		12	},
 	{	0, 	COMMA, 		THROW, 		3	},
-	{	0,	RPARAN,		THROW,		11	},
-    	{	1, 	COMMA, 		THROW, 		3	},
-	{	0,	RPARAN,		THROW,		11	},
+	{	0,	RPARAN,		THROW,		13	},
+	{	1,	NULLTOKEN,	MARKNOTNULL,	6	},
+	{	1,	KEY,		MARKPRIMARY,	6	},
     	{	1, 	SEMI, 		DONE, 		0	}	},
 {   	{   	0, 	DESTROY, 	EAT1, 		0	},
     	{	1, 	STR, 		EAT1, 		0	},
@@ -163,6 +165,34 @@ PARSER_TABLE table [21] [20] = {
 	{	0,	SEMI,		DONE,		0	},
 	{	1,	STR,		EAT1,		0	},
 	{	1,	SEMI,		DONE,		0	}	},
+{	{	0,	BEGINTRANSACTION, EAT1,		0	},
+	{	1,	SEMI,		DONE,		0	}	},
+{	{	0,	COMMITTRANSACTION, EAT1,	0	},
+	{	1,	SEMI,		DONE,		0	}	},
+{	{	0,	ROLLBACKTRANSACTION, EAT1,	0	},
+	{	1,	SEMI,		DONE,		0	}	},
+{	{	0,	UPDATE,		EAT1,		0	},
+	{	1,	STR,		EAT1,		0	},
+	{	1,	SET,		THROW,		0	},
+	{	1,	STR,		EAT1,		0	},
+	{	1,	EQOP,		THROW,		0	},
+	{	1,	NUMBER,		EAT1,		7	},
+	{	0,	QUOTEDSTR,	EAT1,		0	},
+	{	1,	COMMA,		THROW,		3	},
+	{	0,	WHERE,		EAT1,		0	},
+	{	1,	LPARAN,		THROW,		0	},
+	{	1,	STR,		EAT1,		0	},
+	{	1,	EQOP,		EAT3,		17	},
+	{	0,	GEOP,		EAT3,		17	},
+	{	0,	GTOP,		EAT3,		17	},
+	{	0,	LEOP,		EAT3,		17	},
+	{	0,	NOTEQOP,	EAT3,		17	},
+	{	0,	LTOP,		EAT3,		0	},
+	{	1,	NUMBER,		EAT1,		19	},
+	{	0,	QUOTEDSTR,	EAT1,		0	},
+	{	1,	AND,		THROW,		10	},
+	{	0,	RPARAN,		THROW,		0	},
+	{	1,	SEMI,		DONE,		0	}	},
 };
 
 
@@ -256,7 +286,7 @@ int tcode;
 	    ptr [loop] [0] = '\0';
 
 	tcode = findtoken (buff, tokenbuff, &len);
-	if ((tcode >= CREATEDB) && (tcode <= DROPINDEX)) {
+	if ((tcode >= CREATEDB) && (tcode <= UPDATE)) {
 	    command = tcode - CREATEDB;
 	    state = 0;
 	    pcount = 0;
@@ -285,6 +315,12 @@ int tcode;
 			    break;
 			case MARKUNIQUE :
 			    strcat(ptr[pcount - 1], "!");
+			    break;
+			case MARKNOTNULL :
+			    strcat(ptr[pcount - 1], "^");
+			    break;
+			case MARKPRIMARY :
+			    strcat(ptr[pcount - 1], "#");
 			    break;
 			case THROW :
 			    break;
@@ -344,6 +380,18 @@ int tcode;
 		break;
 	    case DROPINDEX :
 		DropIndex(pcount, ptr);
+		break;
+	    case BEGINTRANSACTION :
+		BeginTransaction(pcount, ptr);
+		break;
+	    case COMMITTRANSACTION :
+		CommitTransaction(pcount, ptr);
+		break;
+	    case ROLLBACKTRANSACTION :
+		RollbackTransaction(pcount, ptr);
+		break;
+	    case UPDATE :
+		Update(pcount, ptr);
 		break;
 	    /*
 	    case SORT :
@@ -705,8 +753,16 @@ short	*len;				/* pointer to token length variable   */
 	    if (strcmp (btokenp, "help") == EQUAL) return (HELP);
 	    if (strcmp (btokenp, "buildindex") == EQUAL) return (BUILDINDEX);
 	    if (strcmp (btokenp, "dropindex") == EQUAL) return (DROPINDEX);
+	    if (strcmp (btokenp, "begin") == EQUAL) return (BEGINTRANSACTION);
+	    if (strcmp (btokenp, "commit") == EQUAL) return (COMMITTRANSACTION);
+	    if (strcmp (btokenp, "rollback") == EQUAL) return (ROLLBACKTRANSACTION);
+	    if (strcmp (btokenp, "update") == EQUAL) return (UPDATE);
 	    if (strcmp (btokenp, "for") == EQUAL) return (FOR);
 	    if (strcmp (btokenp, "unique") == EQUAL) return (UNIQUE);
+	    if (strcmp (btokenp, "not") == EQUAL) return (NOT);
+	    if (strcmp (btokenp, "null") == EQUAL) return (NULLTOKEN);
+	    if (strcmp (btokenp, "primary") == EQUAL) return (PRIMARY);
+	    if (strcmp (btokenp, "set") == EQUAL) return (SET);
 	    if (strcmp (btokenp, "") == EQUAL) return (ILLEGAL);
 
 	    return (STR);

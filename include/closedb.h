@@ -12,6 +12,7 @@
 #include "error.h"
 #include "globals.h"
 #include "closecats.h"
+#include "transaction.h"
 
 #include <stdio.h>
 #include <string.h>

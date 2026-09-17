@@ -9,6 +9,7 @@
 #define CACHE_H_
 
 #include "defs.h"
+#include "locking.h"
 
 /* Attribute catalog structure*/
 struct attrCatalog {
@@ -16,6 +17,8 @@ struct attrCatalog {
     unsigned int length;      //length of attribute
     datatype type;              //attribute type: i, f, or s
     bool unique;                //whether values must be unique in the relation
+    bool notNull;               //whether NULL values are disallowed
+    bool primaryKey;            //whether this attribute is the primary key
     char attrName[RELNAME];     //name of attribute
     char relName[RELNAME];      //name of relation
 
@@ -33,6 +36,8 @@ typedef struct relCache {
 
     Rid relcatRid;                  //RID
     int relFile;                    //File descriptor for the open relation
+    int lockId;                     //Cross-process table lock
+    LockMode lockMode;              //Shared for reads, exclusive for writes
     bool dirty;                     //True if record on disk is out-dated
     struct attrCatalog* attrList;   //Linked list of attribute descriptors
 } CacheEntry;

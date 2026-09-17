@@ -31,7 +31,19 @@
  *      Uses FindRec from physical layer.
  */
 
+static int OpenCatsUnlocked();
+
 int OpenCats() {
+    int catalogLock = AcquireManagedCatalogLock(LOCK_SHARED);
+    if (catalogLock == NOTOK) {
+        return ReportLockFailure();
+    }
+    int result = OpenCatsUnlocked();
+    ReleaseManagedLock(catalogLock);
+    return result;
+}
+
+static int OpenCatsUnlocked() {
     char *recPtr;
     int i, returnValue;
     RelCatalogRecord catalogRecord;
@@ -59,6 +71,8 @@ int OpenCats() {
     g_CatCache[0].relcatRid.pid = 1;
     g_CatCache[0].relcatRid.slotnum = 1;
     g_CatCache[0].relFile = open(RELCAT, O_RDWR);
+    g_CatCache[0].lockId = NOTOK;
+    g_CatCache[0].lockMode = LOCK_NONE;
     g_CatCache[0].dirty = FALSE;
     g_CatCache[0].attrList = createAttributeCatalogRelCat();
 
@@ -84,6 +98,8 @@ int OpenCats() {
     g_CatCache[1].relcatRid.pid = 1;
     g_CatCache[1].relcatRid.slotnum = 2;
     g_CatCache[1].relFile = open(ATTRCAT, O_RDWR);
+    g_CatCache[1].lockId = NOTOK;
+    g_CatCache[1].lockMode = LOCK_NONE;
     g_CatCache[1].dirty = FALSE;
     g_CatCache[1].attrList = createAttributeCatalogAttrCat();
 

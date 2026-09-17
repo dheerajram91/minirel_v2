@@ -1,4 +1,5 @@
 #include "../include/closedb.h"
+#include "../include/wal.h"
 
 /**
  * Closes the currently opened database and changes
@@ -31,9 +32,16 @@ int CloseDB(int argc, char **argv) {
     if (g_DBOpenFlag != OK) {
         return ErrorMsgs(DB_NOT_OPEN, g_PrintFlag);
     }
+    if (TransactionIsActive() == TRUE) {
+        return ErrorMsgs(TRANSACTION_ACTIVE, g_PrintFlag);
+    }
     if (CloseCats() == OK) {
+        int walResult = WalCloseDatabase();
         g_DBOpenFlag = NOTOK;
         chdir(g_InvokedDirectory);
+        if (walResult != OK) {
+            return ErrorMsgs(FILE_SYSTEM_ERROR, g_PrintFlag);
+        }
         return OK;
     } else {
         return NOTOK;

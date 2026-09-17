@@ -2,6 +2,8 @@
 
 #define _DESTROY  "_destroy"
 
+static int CreateUnlocked(int argc, char **argv);
+
 /**
  * This routine creates a new relation with the specified name and attributes
  *
@@ -45,18 +47,54 @@
  *      Uses OpenRel(), Insert(), Destroy()
  */
 int Create(int argc, char **argv) {
+    if (argc < 2 || g_DBOpenFlag != OK) {
+        return CreateUnlocked(argc, argv);
+    }
+
+    int tableLock = AcquireManagedTableLock(argv[1], LOCK_EXCLUSIVE);
+    if (tableLock == NOTOK) {
+        return ReportLockFailure();
+    }
+    int catalogLock = AcquireManagedCatalogLock(LOCK_EXCLUSIVE);
+    if (catalogLock == NOTOK) {
+        ReleaseManagedLock(tableLock);
+        return ReportLockFailure();
+    }
+
+    if (RefreshCatalogCaches() != OK) {
+        ReleaseManagedLock(catalogLock);
+        ReleaseManagedLock(tableLock);
+        return NOTOK;
+    }
+    int result = CreateUnlocked(argc, argv);
+    FlushPage(ATTRCAT_CACHE);
+    FlushPage(RELCAT_CACHE);
+    ReleaseManagedLock(catalogLock);
+    ReleaseManagedLock(tableLock);
+    return result;
+}
+
+static int CreateUnlocked(int argc, char **argv) {
 
     if (g_DBOpenFlag != OK) {
         return ErrorMsgs(DB_NOT_OPEN, g_PrintFlag);
     }
 
-    int offset, length, i, isUnique;
+    int offset, length, i, isUnique, isNotNull, isPrimaryKey, primaryKeyCount;
     char type, attrName[RELNAME], relName[RELNAME], attrFormat[16];
 
     if (isValidString(argv[1]) == NOTOK) {
         return ErrorMsgs(INVALID_ATTR_NAME, g_PrintFlag);
     }
     strcpy(relName, argv[1]);
+
+    primaryKeyCount = 0;
+    for (i = 3; i < argc; i += 2) {
+        if (strchr(argv[i], '#') != NULL)
+            primaryKeyCount++;
+    }
+    if (primaryKeyCount > 1)
+        return ErrorMsgs(MULTIPLE_PRIMARY_KEYS, g_PrintFlag);
 
     /* To check if relation exists, we will call openRel
      * after turning off the error print flag temporarily. */
@@ -80,7 +118,9 @@ int Create(int argc, char **argv) {
 
         strcpy(attrFormat, argv[i + 1]);
         type = attrFormat[0];
-        isUnique = strchr(attrFormat, '!') != NULL;
+        isPrimaryKey = strchr(attrFormat, '#') != NULL;
+        isUnique = isPrimaryKey || strchr(attrFormat, '!') != NULL;
+        isNotNull = isPrimaryKey || strchr(attrFormat, '^') != NULL;
         if (type != INTEGER && type != STRING && type != FLOAT) {
             deleteAttrCatEntries(relName);
             return ErrorMsgs(INVALID_ATTR_TYPE, g_PrintFlag);
@@ -97,7 +137,10 @@ int Create(int argc, char **argv) {
             if (strcmp(attrCatArgs[j], OFFSET) == 0) {
                 sprintf(attrCatArgs[j + 1], "%d", offset);
             } else if (strcmp(attrCatArgs[j], TYPE) == 0) {
-                sprintf(attrCatArgs[j + 1], "%d", EncodeAttributeType(type, isUnique));
+                sprintf(
+                        attrCatArgs[j + 1],
+                        "%d",
+                        EncodeAttributeType(type, isUnique, isNotNull, isPrimaryKey));
             } else if (strcmp(attrCatArgs[j], LENGTH) == 0) {
                 sprintf(attrCatArgs[j + 1], "%d", length);
             } else if (strcmp(attrCatArgs[j], ATTRNAME) == 0) {
@@ -154,12 +197,16 @@ int Create(int argc, char **argv) {
     freeAllottedMem(relcatArgs, relcatArraySize);
 
     //Creating the file for relation and adding a page
-    int fd = open(relName, O_RDWR | O_CREAT, S_IRWXU);
-    char *slotMap = (char *) malloc((PAGESIZE - MAXRECORD) * sizeof(char));
-    convertIntToByteArray(0, slotMap);
-    write(fd, slotMap, (PAGESIZE - MAXRECORD));
+    int fd = open(relName, O_RDWR | O_CREAT | O_TRUNC, S_IRWXU);
+    char *emptyPage = (char *) calloc(PAGESIZE, 1);
+    write(fd, emptyPage, PAGESIZE);
+#ifdef _WIN32
+    _commit(fd);
+#else
+    fsync(fd);
+#endif
     close(fd);
-    free(slotMap);
+    free(emptyPage);
 
     return OK; /* all's fine */
 }

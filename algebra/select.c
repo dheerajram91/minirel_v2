@@ -117,7 +117,7 @@ int Select(int argc, char **argv) {
     if (retVal == NOTOK)
         return NOTOK;
 
-    OpenRel(argv[1]);
+    OpenRelWithLock(argv[1], LOCK_EXCLUSIVE);
     newRelNum = FindRelNum(argv[1]);
 
     switch (type) {

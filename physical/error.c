@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include "../include/error.h"
 #include "../include/defs.h"
+#include "../include/transaction.h"
 
 /**
  * Prints out the relevant error messages
@@ -8,6 +9,9 @@
  * @param errorId
  */
 int ErrorMsgs(int errorId, int printFlag) {
+    if (printFlag == OK) {
+        TransactionMarkFailure();
+    }
     if (printFlag == OK) {
         printf("<ERROR %d>: ", errorId);
         switch (errorId) {
@@ -132,6 +136,33 @@ duplicate entry.\n");
                 break;
             case UNIQUE_CONSTRAINT_VIOLATION:
                 printf("Unique constraint violated! The value already exists for a unique attribute.\n");
+                break;
+            case MULTIPLE_PRIMARY_KEYS:
+                printf("A relation can declare only one primary key.\n");
+                break;
+            case PRIMARY_KEY_VIOLATION:
+                printf("Primary key constraint violated! The key value already exists.\n");
+                break;
+            case TRANSACTION_ACTIVE:
+                printf("A transaction is already active. Commit or roll it back first.\n");
+                break;
+            case NO_ACTIVE_TRANSACTION:
+                printf("No transaction is active. Call begin first.\n");
+                break;
+            case TRANSACTION_ROLLBACK_FAILED:
+                printf("Transaction rollback could not restore all original files.\n");
+                break;
+            case LOCK_TIMEOUT:
+                printf("Timed out waiting for a transaction lock. Roll back and retry.\n");
+                break;
+            case TRANSACTION_ABORTED:
+                printf("Transaction was rolled back because an earlier lock request failed.\n");
+                break;
+            case WAL_WRITE_ERROR:
+                printf("Write-ahead log append or durable flush failed.\n");
+                break;
+            case WAL_RECOVERY_ERROR:
+                printf("Write-ahead log recovery failed; the database was not opened.\n");
                 break;
             default:
                 printf("Congratulations! You just won 500 million GBP! Please send your \

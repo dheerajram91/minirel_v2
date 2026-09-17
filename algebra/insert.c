@@ -51,7 +51,7 @@ int Insert(int argc, char **argv) {
     char relName[RELNAME], attrName[RELNAME];
     strcpy(relName, argv[1]);
 
-    int relNum = OpenRel(relName);
+    int relNum = OpenRelWithLock(relName, LOCK_EXCLUSIVE);
     if (relNum == NOTOK) {
         return NOTOK;
     }

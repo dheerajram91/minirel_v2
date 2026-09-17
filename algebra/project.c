@@ -91,7 +91,7 @@ int Project(int argc, char **argv) {
     /* Inserting data to the new relation */
     Rid startRid = { 0, 0 }, *foundRid;
     char *recPtr;
-    if (OpenRel(destRel) == NOTOK) {
+    if (OpenRelWithLock(destRel, LOCK_EXCLUSIVE) == NOTOK) {
         return NOTOK;
     }
     int destRelNum = FindRelNum(destRel);

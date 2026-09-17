@@ -171,3 +171,86 @@ test("unique fields reject duplicate values after reopening", async (context) =>
     await rm(workingDirectory, { recursive: true, force: true });
   }
 });
+
+test("primary keys imply uniqueness and persist after reopening", async (context) => {
+  const status = await getMinirelStatus();
+  if (!status.available) {
+    context.skip("MINIREL executable has not been built.");
+    return;
+  }
+
+  const workingDirectory = await mkdtemp(path.join(os.tmpdir(), "minirel-"));
+  try {
+    const setup = await runMinirelScript({
+      workingDirectory,
+      script: [
+        "createdb school;",
+        "opendb school;",
+        "create students (id = i primary key, name = s50 not null);",
+        'insert into students (id = 1, name = "Ada");',
+        "closedb;",
+      ].join("\n"),
+    });
+    assert.deepEqual(setup.errors, []);
+
+    const duplicate = await runMinirelScript({
+      workingDirectory,
+      script: [
+        "opendb school;",
+        'insert into students (id = 2, name = "Grace");',
+        'insert into students (id = 1, name = "Linus");',
+        "print students;",
+        "closedb;",
+        "destroydb school;",
+      ].join("\n"),
+    });
+
+    assert.deepEqual(duplicate.errors, [
+      {
+        code: 139,
+        message: "Primary key constraint violated! The key value already exists.",
+      },
+    ]);
+    assert.match(duplicate.stdout, /\|\s+1\s+\|\s+Ada\s+\|/);
+    assert.match(duplicate.stdout, /\|\s+2\s+\|\s+Grace\s+\|/);
+    assert.doesNotMatch(duplicate.stdout, /\|\s+1\s+\|\s+Linus\s+\|/);
+  } finally {
+    await rm(workingDirectory, { recursive: true, force: true });
+  }
+});
+
+test("relations reject multiple primary keys", async (context) => {
+  const status = await getMinirelStatus();
+  if (!status.available) {
+    context.skip("MINIREL executable has not been built.");
+    return;
+  }
+
+  const workingDirectory = await mkdtemp(path.join(os.tmpdir(), "minirel-"));
+  try {
+    const result = await runMinirelScript({
+      workingDirectory,
+      script: [
+        "createdb school;",
+        "opendb school;",
+        "create students (id = i primary key, email = s50 primary key);",
+        'insert into students (id = 1, email = "ada@example.com");',
+        "closedb;",
+        "destroydb school;",
+      ].join("\n"),
+    });
+
+    assert.deepEqual(result.errors, [
+      {
+        code: 138,
+        message: "A relation can declare only one primary key.",
+      },
+      {
+        code: 101,
+        message: "Relation does not exist! Please check the name and try again.",
+      },
+    ]);
+  } finally {
+    await rm(workingDirectory, { recursive: true, force: true });
+  }
+});

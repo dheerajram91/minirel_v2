@@ -22,10 +22,10 @@ CFLAGS = -g $(DFLAG) -I$(INCLUDE)
 # "#ifdef" for more details
 
 SRCS = \
-	insert.c delete.c join.c project.c select.c 
+	insert.c delete.c join.c project.c select.c update.c
 
 OBJ = \
-	insert.o delete.o join.o project.o select.o
+	insert.o delete.o join.o project.o select.o update.o
 
 #############################################################
 # 	stuff to build the executables
@@ -42,6 +42,7 @@ delete.o : $(INCLUDE)/delete.h
 join.o : $(INCLUDE)/join.h
 project.o : $(INCLUDE)/project.h
 select.o : $(INCLUDE)/select.h
+update.o : $(INCLUDE)/update.h
 
 ###############################################################
 #  misc

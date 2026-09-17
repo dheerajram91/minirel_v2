@@ -1,6 +1,6 @@
 createdb minirel-smoke;
 opendb minirel-smoke;
-create students (sname = s24, sid = i unique, gpa = f);
+create students (sname = s24 not null, sid = i primary key, gpa = f);
 insert into students (sname = "Ada", sid = 1, gpa = 4.0);
 print students;
 closedb;

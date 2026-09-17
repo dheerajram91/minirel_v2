@@ -23,6 +23,8 @@
 
 /* Constraint bits share the stored type integer to preserve the legacy 52-byte record. */
 #define UNIQUE_ATTRIBUTE_FLAG 0x100
+#define NOT_NULL_ATTRIBUTE_FLAG 0x200
+#define PRIMARY_KEY_ATTRIBUTE_FLAG 0x400
 #define ATTRIBUTE_TYPE_MASK 0xFF
 
 #define RELCAT_ATTRIBUTE_COUNT 6
@@ -35,6 +37,8 @@ typedef struct catalogAttributeDefinition {
     unsigned int length;
     datatype type;
     bool unique;
+    bool notNull;
+    bool primaryKey;
 } CatalogAttributeDefinition;
 
 typedef struct relCatalogRecord {
@@ -51,6 +55,8 @@ typedef struct attrCatalogRecord {
     unsigned int length;
     datatype type;
     bool unique;
+    bool notNull;
+    bool primaryKey;
     char attrName[RELNAME];
     char relName[RELNAME];
 } AttrCatalogRecord;
@@ -58,8 +64,13 @@ typedef struct attrCatalogRecord {
 extern const CatalogAttributeDefinition RELCAT_SCHEMA[RELCAT_ATTRIBUTE_COUNT];
 extern const CatalogAttributeDefinition ATTRCAT_SCHEMA[ATTRCAT_ATTRIBUTE_COUNT];
 
-int EncodeAttributeType(datatype type, bool unique);
-void DecodeAttributeType(int encodedType, datatype *type, bool *unique);
+int EncodeAttributeType(datatype type, bool unique, bool notNull, bool primaryKey);
+void DecodeAttributeType(
+        int encodedType,
+        datatype *type,
+        bool *unique,
+        bool *notNull,
+        bool *primaryKey);
 
 void EncodeRelCatalogRecord(char *destination, const RelCatalogRecord *record);
 void DecodeRelCatalogRecord(const char *source, RelCatalogRecord *record);

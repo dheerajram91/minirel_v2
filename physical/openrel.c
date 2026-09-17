@@ -39,22 +39,44 @@
  */
 
 int OpenRel(char* relName) {
+    return OpenRelWithLock(relName, LOCK_SHARED);
+}
+
+int OpenRelWithLock(char* relName, LockMode mode) {
     Rid startRid, *foundRid;
     char* byteArray;
     RelCatalogRecord relationRecord;
     AttrCatalogRecord attributeRecord;
     struct attrCatalog *temp = NULL, *newNode = NULL;
     bool isFirstExecution = TRUE;
-    int i, j, returnVal;
+    int i, returnVal;
     for (i = 0; i < MAXOPEN; i++) {
         if (g_CacheInUse[i] == TRUE && strcmp(g_CatCache[i].relName, relName) == 0) {
-
+            if (i >= 2 && g_CatCache[i].lockMode < mode) {
+                CloseRel(i);
+                break;
+            }
             g_CacheTimestamp[i] = g_CacheLastTimestamp;
             g_CacheLastTimestamp++;
             return i;
         }
     }
 
+    int tableLock = AcquireManagedTableLock(relName, mode);
+    if (tableLock == NOTOK) {
+        return ReportLockFailure();
+    }
+    int catalogLock = AcquireManagedCatalogLock(LOCK_SHARED);
+    if (catalogLock == NOTOK) {
+        ReleaseManagedLock(tableLock);
+        return ReportLockFailure();
+    }
+
+    if (RefreshCatalogCaches() != OK) {
+        ReleaseManagedLock(catalogLock);
+        ReleaseManagedLock(tableLock);
+        return NOTOK;
+    }
     startRid.pid = 1;
     startRid.slotnum = 0;
 
@@ -62,6 +84,8 @@ int OpenRel(char* relName) {
     EQ);
 
     if (returnVal == NOTOK) {
+        ReleaseManagedLock(catalogLock);
+        ReleaseManagedLock(tableLock);
         return ErrorMsgs(RELNOEXIST, g_PrintFlag);
     }/* Relation does not exist with given Relation Name */
     else {
@@ -112,8 +136,16 @@ int OpenRel(char* relName) {
 
         g_CatCache[i].relcatRid = *foundRid;
         g_CatCache[i].dirty = FALSE;
+        g_CatCache[i].lockId = tableLock;
+        g_CatCache[i].lockMode = mode;
 
         g_CatCache[i].relFile = open(relName, O_RDWR);
+        if (g_CatCache[i].relFile < 0) {
+            g_CacheInUse[i] = FALSE;
+            ReleaseManagedLock(catalogLock);
+            ReleaseManagedLock(tableLock);
+            return ErrorMsgs(FILE_SYSTEM_ERROR, g_PrintFlag);
+        }
 
         startRid.pid = 1;
         startRid.slotnum = 0;
@@ -122,6 +154,10 @@ int OpenRel(char* relName) {
                 relName, EQ);
 
         if (returnVal == NOTOK) {
+            close(g_CatCache[i].relFile);
+            g_CacheInUse[i] = FALSE;
+            ReleaseManagedLock(catalogLock);
+            ReleaseManagedLock(tableLock);
             return ErrorMsgs(NO_ATTRS_FOUND, g_PrintFlag);
         }
 
@@ -142,6 +178,8 @@ int OpenRel(char* relName) {
             temp->length = attributeRecord.length;
             temp->type = attributeRecord.type;
             temp->unique = attributeRecord.unique;
+            temp->notNull = attributeRecord.notNull;
+            temp->primaryKey = attributeRecord.primaryKey;
             strcpy(temp->attrName, attributeRecord.attrName);
             strcpy(temp->relName, attributeRecord.relName);
             temp->next = NULL;
@@ -151,6 +189,7 @@ int OpenRel(char* relName) {
             returnVal = FindRec(ATTRCAT_CACHE, &startRid, &foundRid, &byteArray, 's', RELNAME, 32,
                     relName, EQ);
         }
+        ReleaseManagedLock(catalogLock);
         return i;
     }
 }

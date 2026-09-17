@@ -12,6 +12,7 @@
 #include "../include/error.h"
 #include "../include/globals.h"
 #include "../include/closedb.h"
+#include "../include/transaction.h"
 
 #include <stdio.h>
 #include <string.h>
