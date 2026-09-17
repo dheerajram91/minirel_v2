@@ -12,6 +12,7 @@
 #include "defs.h"
 #include "globals.h"
 #include "helpers.h"
+#include "catalog.h"
  
 #include <stdio.h>
 #include <unistd.h>

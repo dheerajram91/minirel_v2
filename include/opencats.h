@@ -17,6 +17,7 @@
 #include "helpers.h"
 #include "findrec.h"
 #include "error.h"
+#include "catalog.h"
 
 #include <stdio.h>
 #include <stdlib.h>

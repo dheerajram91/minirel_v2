@@ -39,6 +39,7 @@
 int CloseRel(int relNum) {
     int numPgs, numRecs;
     char *recPtr;
+    RelCatalogRecord relationRecord;
     Rid startRid = { 1, 0 }, *foundRid;
 
     FlushPage(relNum);
@@ -52,8 +53,10 @@ int CloseRel(int relNum) {
         } else {
             numPgs = g_CatCache[relNum].numPgs;
             numRecs = g_CatCache[relNum].numRecs;
-            convertIntToByteArray(numRecs, recPtr + 32);
-            convertIntToByteArray(numPgs, recPtr + 36);
+            DecodeRelCatalogRecord(recPtr, &relationRecord);
+            relationRecord.numRecs = numRecs;
+            relationRecord.numPgs = numPgs;
+            EncodeRelCatalogRecord(recPtr, &relationRecord);
 
             WriteRec(RELCAT_CACHE, recPtr, foundRid);
             FlushPage(RELCAT_CACHE);

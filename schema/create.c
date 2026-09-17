@@ -50,8 +50,8 @@ int Create(int argc, char **argv) {
         return ErrorMsgs(DB_NOT_OPEN, g_PrintFlag);
     }
 
-    int offset, length, i;
-    char type, attrName[RELNAME], relName[RELNAME], attrFormat[4];
+    int offset, length, i, isUnique;
+    char type, attrName[RELNAME], relName[RELNAME], attrFormat[16];
 
     if (isValidString(argv[1]) == NOTOK) {
         return ErrorMsgs(INVALID_ATTR_NAME, g_PrintFlag);
@@ -80,6 +80,7 @@ int Create(int argc, char **argv) {
 
         strcpy(attrFormat, argv[i + 1]);
         type = attrFormat[0];
+        isUnique = strchr(attrFormat, '!') != NULL;
         if (type != INTEGER && type != STRING && type != FLOAT) {
             deleteAttrCatEntries(relName);
             return ErrorMsgs(INVALID_ATTR_TYPE, g_PrintFlag);
@@ -96,7 +97,7 @@ int Create(int argc, char **argv) {
             if (strcmp(attrCatArgs[j], OFFSET) == 0) {
                 sprintf(attrCatArgs[j + 1], "%d", offset);
             } else if (strcmp(attrCatArgs[j], TYPE) == 0) {
-                sprintf(attrCatArgs[j + 1], "%d", type);
+                sprintf(attrCatArgs[j + 1], "%d", EncodeAttributeType(type, isUnique));
             } else if (strcmp(attrCatArgs[j], LENGTH) == 0) {
                 sprintf(attrCatArgs[j + 1], "%d", length);
             } else if (strcmp(attrCatArgs[j], ATTRNAME) == 0) {
@@ -108,8 +109,8 @@ int Create(int argc, char **argv) {
         offset += length;
         if (offset > MAXRECORD) {
             char **destroy_args = (char **) malloc(sizeof(char*) * 2);
-            destroy_args[0] = (char *) malloc(sizeof(char) * strlen(_DESTROY));
-            destroy_args[1] = (char *) malloc(sizeof(char) * strlen(relName));
+            destroy_args[0] = (char *) malloc(sizeof(char) * (strlen(_DESTROY) + 1));
+            destroy_args[1] = (char *) malloc(sizeof(char) * (strlen(relName) + 1));
             sprintf(destroy_args[0], "%s", _DESTROY);
             sprintf(destroy_args[1], "%s", relName);
             Destroy(2, (char **) destroy_args);
@@ -176,15 +177,15 @@ void createTemplate(int cacheIndex, char ***args, char *relName, int *arraySize)
     *arraySize = (2 * g_CatCache[cacheIndex].numAttrs + 2);
 
     *args = (char **) malloc(*arraySize * sizeof(char *));
-    (*args)[0] = (char *) malloc(strlen("_insert") * sizeof(char));
+    (*args)[0] = (char *) malloc((strlen("_insert") + 1) * sizeof(char));
     strcpy((*args)[0], "_insert");
-    (*args)[1] = (char *) malloc(strlen(relName) * sizeof(char));
+    (*args)[1] = (char *) malloc((strlen(relName) + 1) * sizeof(char));
     strcpy((*args)[1], relName);
 
     i = 2;
     while (attrList != NULL) {
-        (*args)[i] = (char *) malloc(strlen(attrList->attrName) * sizeof(char));
-        (*args)[i + 1] = (char *) malloc((attrList->length) * sizeof(char));
+        (*args)[i] = (char *) malloc((strlen(attrList->attrName) + 1) * sizeof(char));
+        (*args)[i + 1] = (char *) malloc((attrList->length + 1) * sizeof(char));
         strcpy((*args)[i], attrList->attrName);
         i += 2;
         attrList = attrList->next;

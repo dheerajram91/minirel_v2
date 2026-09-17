@@ -41,6 +41,8 @@
 int OpenRel(char* relName) {
     Rid startRid, *foundRid;
     char* byteArray;
+    RelCatalogRecord relationRecord;
+    AttrCatalogRecord attributeRecord;
     struct attrCatalog *temp = NULL, *newNode = NULL;
     bool isFirstExecution = TRUE;
     int i, j, returnVal;
@@ -100,12 +102,13 @@ int OpenRel(char* relName) {
         }
 
         /* position i is available */
-        strcpy(g_CatCache[i].relName, relName);
-        g_CatCache[i].recLength = readIntFromByteArray(byteArray, 20);
-        g_CatCache[i].recsPerPg = readIntFromByteArray(byteArray, 24);
-        g_CatCache[i].numAttrs = readIntFromByteArray(byteArray, 28);
-        g_CatCache[i].numRecs = readIntFromByteArray(byteArray, 32);
-        g_CatCache[i].numPgs = readIntFromByteArray(byteArray, 36);
+        DecodeRelCatalogRecord(byteArray, &relationRecord);
+        strcpy(g_CatCache[i].relName, relationRecord.relName);
+        g_CatCache[i].recLength = relationRecord.recLength;
+        g_CatCache[i].recsPerPg = relationRecord.recsPerPg;
+        g_CatCache[i].numAttrs = relationRecord.numAttrs;
+        g_CatCache[i].numRecs = relationRecord.numRecs;
+        g_CatCache[i].numPgs = relationRecord.numPgs;
 
         g_CatCache[i].relcatRid = *foundRid;
         g_CatCache[i].dirty = FALSE;
@@ -134,11 +137,13 @@ int OpenRel(char* relName) {
                 temp = newNode;
             }
 
-            temp->offset = readIntFromByteArray(byteArray, 0);
-            temp->length = readIntFromByteArray(byteArray, 4);
-            temp->type = readIntFromByteArray(byteArray, 8);
-            readStringFromByteArray(temp->attrName, byteArray, 12, RELNAME);
-            readStringFromByteArray(temp->relName, byteArray, 32, RELNAME);
+            DecodeAttrCatalogRecord(byteArray, &attributeRecord);
+            temp->offset = attributeRecord.offset;
+            temp->length = attributeRecord.length;
+            temp->type = attributeRecord.type;
+            temp->unique = attributeRecord.unique;
+            strcpy(temp->attrName, attributeRecord.attrName);
+            strcpy(temp->relName, attributeRecord.relName);
             temp->next = NULL;
 
             startRid = *foundRid;

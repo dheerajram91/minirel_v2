@@ -130,6 +130,9 @@ its values to insert a new record. Use \n\t select into <some_name> from attrcat
                 printf("Attribute repeated! Please check the insert query and remove the \
 duplicate entry.\n");
                 break;
+            case UNIQUE_CONSTRAINT_VIOLATION:
+                printf("Unique constraint violated! The value already exists for a unique attribute.\n");
+                break;
             default:
                 printf("Congratulations! You just won 500 million GBP! Please send your \
 bank details to developer to claim the price. :)\n");

@@ -16,6 +16,7 @@
 #include "defs.h"
 #include "findrec.h" 
 #include "closerel.h"
+#include "catalog.h"
 
 #include <string.h>
 #include <stdio.h>

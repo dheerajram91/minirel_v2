@@ -33,11 +33,8 @@
 
 int OpenCats() {
     char *recPtr;
-    int i, j, returnValue;
-    int relCatNumRecs;
-    int relCatNumPgs;
-    int attrCatNumRecs;
-    int attrCatNumPgs;
+    int i, returnValue;
+    RelCatalogRecord catalogRecord;
 
     Rid startRid = { 1, 0 }, *foundRid;
 
@@ -52,9 +49,9 @@ int OpenCats() {
     /* Creating cache[0] entry for relcat */
 
     strcpy(g_CatCache[0].relName, RELCAT);
-    g_CatCache[0].recLength = 40;
-    g_CatCache[0].recsPerPg = 12;
-    g_CatCache[0].numAttrs = 6;
+    g_CatCache[0].recLength = RELCAT_RECORD_SIZE;
+    g_CatCache[0].recsPerPg = MAXRECORD / RELCAT_RECORD_SIZE;
+    g_CatCache[0].numAttrs = RELCAT_ATTRIBUTE_COUNT;
 
     g_CatCache[0].numRecs = 2;
     g_CatCache[0].numPgs = 1;
@@ -70,20 +67,18 @@ int OpenCats() {
         return ErrorMsgs(NO_CATALOG_FOUND, g_PrintFlag);
     }
 
-    relCatNumRecs = readIntFromByteArray(recPtr, 32);
-    relCatNumPgs = readIntFromByteArray(recPtr, 36);
-
-    g_CatCache[0].numRecs = relCatNumRecs;
-    g_CatCache[0].numPgs = relCatNumPgs;
+    DecodeRelCatalogRecord(recPtr, &catalogRecord);
+    g_CatCache[0].numRecs = catalogRecord.numRecs;
+    g_CatCache[0].numPgs = catalogRecord.numPgs;
 
     /* Creating cache[1] entry for attrcat */
 
     strcpy(g_CatCache[1].relName, ATTRCAT);
-    g_CatCache[1].recLength = 52;
-    g_CatCache[1].recsPerPg = 9;
-    g_CatCache[1].numAttrs = 5;
+    g_CatCache[1].recLength = ATTRCAT_RECORD_SIZE;
+    g_CatCache[1].recsPerPg = MAXRECORD / ATTRCAT_RECORD_SIZE;
+    g_CatCache[1].numAttrs = ATTRCAT_ATTRIBUTE_COUNT;
 
-    g_CatCache[1].numRecs = 11;
+    g_CatCache[1].numRecs = SYSTEM_ATTRIBUTE_COUNT;
     g_CatCache[1].numPgs = 2;
 
     g_CatCache[1].relcatRid.pid = 1;
@@ -97,11 +92,12 @@ int OpenCats() {
         return ErrorMsgs(NO_CATALOG_FOUND, g_PrintFlag);
     }
 
-    relCatNumRecs = readIntFromByteArray(recPtr, 32);
-    relCatNumPgs = readIntFromByteArray(recPtr, 36);
-
-    g_CatCache[1].numRecs = relCatNumRecs;
-    g_CatCache[1].numPgs = relCatNumPgs;
+    DecodeRelCatalogRecord(recPtr, &catalogRecord);
+    g_CatCache[1].recLength = catalogRecord.recLength;
+    g_CatCache[1].recsPerPg = catalogRecord.recsPerPg;
+    g_CatCache[1].numAttrs = catalogRecord.numAttrs;
+    g_CatCache[1].numRecs = catalogRecord.numRecs;
+    g_CatCache[1].numPgs = catalogRecord.numPgs;
 
     return OK;
 }
@@ -115,54 +111,7 @@ int OpenCats() {
  */
 
 struct attrCatalog* createAttributeCatalogAttrCat() {
-    struct attrCatalog *temp, *newNode;
-
-    newNode = malloc(sizeof(struct attrCatalog));
-    (*newNode).offset = 32;
-    (*newNode).length = 20;
-    (*newNode).type = STRING;
-    strcpy((*newNode).attrName, "relName");
-    strcpy((*newNode).relName, ATTRCAT);
-    (*newNode).next = NULL;
-    temp = newNode;
-
-    newNode = malloc(sizeof(struct attrCatalog));
-    (*newNode).offset = 12;
-    (*newNode).length = 20;
-    (*newNode).type = STRING;
-    strcpy((*newNode).attrName, "attrName");
-    strcpy((*newNode).relName, ATTRCAT);
-    (*newNode).next = temp;
-    temp = newNode;
-
-    newNode = malloc(sizeof(struct attrCatalog));
-    (*newNode).offset = 8;
-    (*newNode).length = 4;
-    (*newNode).type = INTEGER;
-    strcpy((*newNode).attrName, "type");
-    strcpy((*newNode).relName, ATTRCAT);
-    (*newNode).next = temp;
-    temp = newNode;
-
-    newNode = malloc(sizeof(struct attrCatalog));
-    (*newNode).offset = 4;
-    (*newNode).length = 4;
-    (*newNode).type = INTEGER;
-    strcpy((*newNode).attrName, "length");
-    strcpy((*newNode).relName, ATTRCAT);
-    (*newNode).next = temp;
-    temp = newNode;
-
-    newNode = malloc(sizeof(struct attrCatalog));
-    (*newNode).offset = 0;
-    (*newNode).length = 4;
-    (*newNode).type = INTEGER;
-    strcpy((*newNode).attrName, "offset");
-    strcpy((*newNode).relName, ATTRCAT);
-    (*newNode).next = temp;
-    temp = newNode;
-
-    return temp;
+    return BuildAttributeCatalog(ATTRCAT_SCHEMA, ATTRCAT_ATTRIBUTE_COUNT, ATTRCAT);
 }
 
 /*
@@ -174,61 +123,5 @@ struct attrCatalog* createAttributeCatalogAttrCat() {
  */
 
 struct attrCatalog* createAttributeCatalogRelCat() {
-    struct attrCatalog *temp, *newNode;
-
-    newNode = malloc(sizeof(struct attrCatalog));
-    (*newNode).offset = 36;
-    (*newNode).length = 4;
-    (*newNode).type = INTEGER;
-    strcpy((*newNode).attrName, "numPgs");
-    strcpy((*newNode).relName, RELCAT);
-    (*newNode).next = NULL;
-    temp = newNode;
-
-    newNode = malloc(sizeof(struct attrCatalog));
-    (*newNode).offset = 32;
-    (*newNode).length = 4;
-    (*newNode).type = INTEGER;
-    strcpy((*newNode).attrName, "numRecs");
-    strcpy((*newNode).relName, RELCAT);
-    (*newNode).next = temp;
-    temp = newNode;
-
-    newNode = malloc(sizeof(struct attrCatalog));
-    (*newNode).offset = 28;
-    (*newNode).length = 4;
-    (*newNode).type = INTEGER;
-    strcpy((*newNode).attrName, "numAttrs");
-    strcpy((*newNode).relName, RELCAT);
-    (*newNode).next = temp;
-    temp = newNode;
-
-    newNode = malloc(sizeof(struct attrCatalog));
-    (*newNode).offset = 24;
-    (*newNode).length = 4;
-    (*newNode).type = INTEGER;
-    strcpy((*newNode).attrName, "recsPerPg");
-    strcpy((*newNode).relName, RELCAT);
-    (*newNode).next = temp;
-    temp = newNode;
-
-    newNode = malloc(sizeof(struct attrCatalog));
-    (*newNode).offset = 20;
-    (*newNode).length = 4;
-    (*newNode).type = INTEGER;
-    strcpy((*newNode).attrName, "recLength");
-    strcpy((*newNode).relName, RELCAT);
-    (*newNode).next = temp;
-    temp = newNode;
-
-    newNode = malloc(sizeof(struct attrCatalog));
-    (*newNode).offset = 0;
-    (*newNode).length = 20;
-    (*newNode).type = STRING;
-    strcpy((*newNode).attrName, "relName");
-    strcpy((*newNode).relName, RELCAT);
-    (*newNode).next = temp;
-    temp = newNode;
-
-    return temp;
+    return BuildAttributeCatalog(RELCAT_SCHEMA, RELCAT_ATTRIBUTE_COUNT, RELCAT);
 }

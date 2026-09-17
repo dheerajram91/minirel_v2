@@ -30,8 +30,11 @@ PARSER_TABLE table [21] [20] = {
     	{	1, 	STR, 		EAT1, 		0	},
     	{	1, 	EQOP, 		THROW, 		0	},
     	{	1, 	STR, 		EAT1, 		0	},
+	{	1, 	UNIQUE,		MARKUNIQUE,	9	},
+	{	0, 	COMMA, 		THROW, 		3	},
+	{	0,	RPARAN,		THROW,		11	},
     	{	1, 	COMMA, 		THROW, 		3	},
-	{	0,	RPARAN,		THROW,		0	},
+	{	0,	RPARAN,		THROW,		11	},
     	{	1, 	SEMI, 		DONE, 		0	}	},
 {   	{   	0, 	DESTROY, 	EAT1, 		0	},
     	{	1, 	STR, 		EAT1, 		0	},
@@ -280,6 +283,9 @@ int tcode;
 			case INC2 :
 			    pcount += 2;
 			    break;
+			case MARKUNIQUE :
+			    strcat(ptr[pcount - 1], "!");
+			    break;
 			case THROW :
 			    break;
 			default :
@@ -387,7 +393,7 @@ short	command,
 {
 short	i, len, more;
 
-	len = (int) error_at - (int) start;
+	len = error_at - start;
 	for (i = 0 ; i < len ; i++)
 	    printf (" ");
 	while (*error_at == ' ') {
@@ -700,6 +706,7 @@ short	*len;				/* pointer to token length variable   */
 	    if (strcmp (btokenp, "buildindex") == EQUAL) return (BUILDINDEX);
 	    if (strcmp (btokenp, "dropindex") == EQUAL) return (DROPINDEX);
 	    if (strcmp (btokenp, "for") == EQUAL) return (FOR);
+	    if (strcmp (btokenp, "unique") == EQUAL) return (UNIQUE);
 	    if (strcmp (btokenp, "") == EQUAL) return (ILLEGAL);
 
 	    return (STR);

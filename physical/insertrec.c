@@ -37,11 +37,33 @@ int InsertRec(const int relNum, char*recPtr) {
         return ErrorMsgs(NULL_ARGUMENT_RECEIVED, g_PrintFlag);
     }
 
-    /* Checking for duplicates */
+    /* Checking for duplicate tuples and unique attribute values */
     Rid *fRid, sRid = { 0, 0 };
     char *record;
-    while (GetNextRec(relNum, &sRid, &fRid, &record) == OK && g_CheckDuplicateTuples == OK) {
-        if (compareRecords(record, recPtr, g_CatCache[relNum].recLength) == OK) {
+    struct attrCatalog *attr;
+    bool hasUniqueAttribute = FALSE;
+    for (attr = g_CatCache[relNum].attrList; attr != NULL; attr = attr->next) {
+        if (attr->unique == TRUE) {
+            hasUniqueAttribute = TRUE;
+            break;
+        }
+    }
+
+    while ((hasUniqueAttribute == TRUE || g_CheckDuplicateTuples == OK)
+            && GetNextRec(relNum, &sRid, &fRid, &record) == OK) {
+        if (hasUniqueAttribute == TRUE) {
+            for (attr = g_CatCache[relNum].attrList; attr != NULL; attr = attr->next) {
+                if (attr->unique == TRUE
+                        && memcmp(record + attr->offset, recPtr + attr->offset,
+                                attr->length) == 0) {
+                    free(fRid);
+                    return ErrorMsgs(UNIQUE_CONSTRAINT_VIOLATION, g_PrintFlag);
+                }
+            }
+        }
+        if (g_CheckDuplicateTuples == OK
+                && compareRecords(record, recPtr, g_CatCache[relNum].recLength) == OK) {
+            free(fRid);
             return ErrorMsgs(DUPLICATE_TUPLE, g_PrintFlag);
         }
         sRid = *fRid;

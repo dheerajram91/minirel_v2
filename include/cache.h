@@ -15,6 +15,7 @@ struct attrCatalog {
     unsigned int offset;      //offset of attribute within record
     unsigned int length;      //length of attribute
     datatype type;              //attribute type: i, f, or s
+    bool unique;                //whether values must be unique in the relation
     char attrName[RELNAME];     //name of attribute
     char relName[RELNAME];      //name of relation
 

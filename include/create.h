@@ -15,6 +15,7 @@
 #include "openrel.h"
 #include "insert.h"
 #include "destroy.h"
+#include "catalog.h"
 
 #include <stdio.h>
 #include <string.h>

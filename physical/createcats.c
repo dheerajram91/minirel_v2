@@ -1,188 +1,128 @@
-/*
- * createcats.c
- *
- *  Created on: 31-Oct-2014
- *      Author: Dheeraj
- */
-
 #include "../include/createcats.h"
 
-/*
- * Function: CreateCats() 
- * ----------------------
- * Creates the system catalogs and places entries in the catalogs for the catalogs
- *
- *  returns: OK on success
- *           NOTOK on failure
- *
- * GLOBAL VARIABLES MODIFIED:
- *      <None>
- *
- * ERRORS REPORTED:
- *      CAT_FILE_ALREADY_EXIST
- *
- * ALGORITHM:
- *   1. Check for Errors
- *   2. Create Relcat
- *   3. Create Attrcat
- *
- * IMPLEMENTATION NOTES:
- *      Uses only local functions except Error Handling function.
- *
- */
+static void InitializeRelationRecord(
+        RelCatalogRecord *record,
+        const char *name,
+        unsigned int recordSize,
+        unsigned int attributeCount,
+        unsigned int recordCount,
+        unsigned int pageCount) {
+    memset(record, 0, sizeof(RelCatalogRecord));
+    strncpy(record->relName, name, RELNAME);
+    record->recLength = recordSize;
+    record->recsPerPg = MAXRECORD / recordSize;
+    record->numAttrs = attributeCount;
+    record->numRecs = recordCount;
+    record->numPgs = pageCount;
+}
+
+static void InitializeAttributeRecord(
+        AttrCatalogRecord *record,
+        const CatalogAttributeDefinition *definition,
+        const char *relationName) {
+    memset(record, 0, sizeof(AttrCatalogRecord));
+    record->offset = definition->offset;
+    record->length = definition->length;
+    record->type = definition->type;
+    record->unique = definition->unique;
+    strncpy(record->attrName, definition->name, RELNAME);
+    strncpy(record->relName, relationName, RELNAME);
+}
 
 int CreateCats() {
     if (CreateRelCat() == OK && CreateAttrCat() == OK)
         return OK;
-    else
-        return NOTOK;
+    return NOTOK;
 }
-
-/*
- * Function: CreateRelCat() 
- * ----------------------
- * Creates relcat catalog file
- *
- *  returns: OK on success
- *           NOTOK on failure
- */
 
 int CreateRelCat() {
     FILE *filePointer;
-    char content[PAGESIZE];
+    char page[PAGESIZE];
+    RelCatalogRecord records[2];
     int i;
 
-    for (i = 0; i < PAGESIZE; i++)
-        content[i] = 0;
-
-    if (access(RELCAT, F_OK) != -1) {
+    if (access(RELCAT, F_OK) != -1)
         return ErrorMsgs(CAT_FILE_ALREADY_EXIST, g_PrintFlag);
-    } /* Catalog Files Exists */
+
+    memset(page, 0, sizeof(page));
+    convertIntToByteArray(CatalogSlotMap(2), page);
+
+    InitializeRelationRecord(
+            &records[0],
+            RELCAT,
+            RELCAT_RECORD_SIZE,
+            RELCAT_ATTRIBUTE_COUNT,
+            2,
+            1);
+    InitializeRelationRecord(
+            &records[1],
+            ATTRCAT,
+            ATTRCAT_RECORD_SIZE,
+            ATTRCAT_ATTRIBUTE_COUNT,
+            SYSTEM_ATTRIBUTE_COUNT,
+            2);
+
+    for (i = 0; i < 2; i++) {
+        EncodeRelCatalogRecord(
+                page + PAGE_HEADER_SIZE + i * RELCAT_RECORD_SIZE,
+                &records[i]);
+    }
 
     filePointer = fopen(RELCAT, "wb");
-
-    //Slotmap for Page 1
-    convertIntToByteArray(0xC0000000, content);
-
-    strncpy(content + PAGESIZE - MAXRECORD, RELCAT, 6);
-
-    convertIntToByteArray(40, content + 20 + PAGESIZE - MAXRECORD);
-    convertIntToByteArray(12, content + 24 + PAGESIZE - MAXRECORD);
-    convertIntToByteArray(6, content + 28 + PAGESIZE - MAXRECORD);
-    convertIntToByteArray(2, content + 32 + PAGESIZE - MAXRECORD);
-    convertIntToByteArray(1, content + 36 + PAGESIZE - MAXRECORD);
-
-    strncpy(content + 40 + PAGESIZE - MAXRECORD, ATTRCAT, 7);
-
-    convertIntToByteArray(52, content + 20 + 40 + PAGESIZE - MAXRECORD);
-    convertIntToByteArray(9, content + 24 + 40 + PAGESIZE - MAXRECORD);
-    convertIntToByteArray(5, content + 28 + 40 + PAGESIZE - MAXRECORD);
-    convertIntToByteArray(11, content + 32 + 40 + PAGESIZE - MAXRECORD);
-    convertIntToByteArray(2, content + 36 + 40 + PAGESIZE - MAXRECORD);
-
-    fwrite(content, 1, PAGESIZE, filePointer);
-
+    if (filePointer == NULL)
+        return ErrorMsgs(FILE_SYSTEM_ERROR, g_PrintFlag);
+    fwrite(page, 1, sizeof(page), filePointer);
     fclose(filePointer);
     return OK;
 }
 
-/*
- * Function: CreateRelCat() 
- * ----------------------
- * Creates relcat catalog file
- *
- *  returns: OK on success
- *           NOTOK on failure
- */
 int CreateAttrCat() {
     FILE *filePointer;
-    char content[PAGESIZE * 2];
-    int i;
+    char pages[PAGESIZE * 2];
+    int recordsPerPage = MAXRECORD / ATTRCAT_RECORD_SIZE;
+    int pageCount = (SYSTEM_ATTRIBUTE_COUNT + recordsPerPage - 1) / recordsPerPage;
+    int pageIndex, recordIndex, recordsOnPage;
 
-    for (i = 0; i < PAGESIZE * 2; i++)
-        content[i] = 0;
-
-    if (access(ATTRCAT, F_OK) != -1) {
+    if (access(ATTRCAT, F_OK) != -1)
         return ErrorMsgs(CAT_FILE_ALREADY_EXIST, g_PrintFlag);
-    } /* Catalog Files Exists */
+
+    memset(pages, 0, sizeof(pages));
+
+    for (pageIndex = 0; pageIndex < pageCount; pageIndex++) {
+        int remaining = SYSTEM_ATTRIBUTE_COUNT - pageIndex * recordsPerPage;
+        recordsOnPage = remaining < recordsPerPage ? remaining : recordsPerPage;
+        convertIntToByteArray(
+                CatalogSlotMap(recordsOnPage),
+                pages + pageIndex * PAGESIZE);
+    }
+
+    for (recordIndex = 0; recordIndex < SYSTEM_ATTRIBUTE_COUNT; recordIndex++) {
+        AttrCatalogRecord record;
+        const CatalogAttributeDefinition *definition;
+        const char *relationName;
+        int slotIndex;
+
+        if (recordIndex < RELCAT_ATTRIBUTE_COUNT) {
+            definition = &RELCAT_SCHEMA[recordIndex];
+            relationName = RELCAT;
+        } else {
+            definition = &ATTRCAT_SCHEMA[recordIndex - RELCAT_ATTRIBUTE_COUNT];
+            relationName = ATTRCAT;
+        }
+
+        InitializeAttributeRecord(&record, definition, relationName);
+        pageIndex = recordIndex / recordsPerPage;
+        slotIndex = recordIndex % recordsPerPage;
+        EncodeAttrCatalogRecord(
+                pages + pageIndex * PAGESIZE + PAGE_HEADER_SIZE
+                        + slotIndex * ATTRCAT_RECORD_SIZE,
+                &record);
+    }
 
     filePointer = fopen(ATTRCAT, "wb");
-
-    //Slotmap for Page 1
-    convertIntToByteArray(0xFF800000, content);
-
-    convertIntToByteArray(0, content + 0 + PAGESIZE - MAXRECORD);
-    convertIntToByteArray(20, content + 4 + PAGESIZE - MAXRECORD);
-    convertIntToByteArray(STRING, content + 8 + PAGESIZE - MAXRECORD);
-    strncpy(content + 12 + PAGESIZE - MAXRECORD, "relName", 7);
-    strncpy(content + 32 + PAGESIZE - MAXRECORD, RELCAT, 6);
-
-    convertIntToByteArray(20, content + 0 + 52 + PAGESIZE - MAXRECORD);
-    convertIntToByteArray(4, content + 4 + 52 + PAGESIZE - MAXRECORD);
-    convertIntToByteArray(INTEGER, content + 8 + 52 + PAGESIZE - MAXRECORD);
-    strncpy(content + 12 + 52 + PAGESIZE - MAXRECORD, "recLength", 9);
-    strncpy(content + 32 + 52 + PAGESIZE - MAXRECORD, RELCAT, 6);
-
-    convertIntToByteArray(24, content + 0 + 52 * 2 + PAGESIZE - MAXRECORD);
-    convertIntToByteArray(4, content + 4 + 52 * 2 + PAGESIZE - MAXRECORD);
-    convertIntToByteArray(INTEGER, content + 8 + 52 * 2 + PAGESIZE - MAXRECORD);
-    strncpy(content + 12 + 52 * 2 + PAGESIZE - MAXRECORD, "recsPerPg", 9);
-    strncpy(content + 32 + 52 * 2 + PAGESIZE - MAXRECORD, RELCAT, 6);
-
-    convertIntToByteArray(28, content + 0 + 52 * 3 + PAGESIZE - MAXRECORD);
-    convertIntToByteArray(4, content + 4 + 52 * 3 + PAGESIZE - MAXRECORD);
-    convertIntToByteArray(INTEGER, content + 8 + 52 * 3 + PAGESIZE - MAXRECORD);
-    strncpy(content + 12 + 52 * 3 + PAGESIZE - MAXRECORD, "numAttrs", 8);
-    strncpy(content + 32 + 52 * 3 + PAGESIZE - MAXRECORD, RELCAT, 6);
-
-    convertIntToByteArray(32, content + 0 + 52 * 4 + PAGESIZE - MAXRECORD);
-    convertIntToByteArray(4, content + 4 + 52 * 4 + PAGESIZE - MAXRECORD);
-    convertIntToByteArray(INTEGER, content + 8 + 52 * 4 + PAGESIZE - MAXRECORD);
-    strncpy(content + 12 + 52 * 4 + PAGESIZE - MAXRECORD, "numRecs", 7);
-    strncpy(content + 32 + 52 * 4 + PAGESIZE - MAXRECORD, RELCAT, 6);
-
-    convertIntToByteArray(36, content + 0 + 52 * 5 + PAGESIZE - MAXRECORD);
-    convertIntToByteArray(4, content + 4 + 52 * 5 + PAGESIZE - MAXRECORD);
-    convertIntToByteArray(INTEGER, content + 8 + 52 * 5 + PAGESIZE - MAXRECORD);
-    strncpy(content + 12 + 52 * 5 + PAGESIZE - MAXRECORD, "numPgs", 6);
-    strncpy(content + 32 + 52 * 5 + PAGESIZE - MAXRECORD, RELCAT, 6);
-
-    convertIntToByteArray(0, content + 0 + 52 * 6 + PAGESIZE - MAXRECORD);
-    convertIntToByteArray(4, content + 4 + 52 * 6 + PAGESIZE - MAXRECORD);
-    convertIntToByteArray(INTEGER, content + 8 + 52 * 6 + PAGESIZE - MAXRECORD);
-    strncpy(content + 12 + 52 * 6 + PAGESIZE - MAXRECORD, "offset", 6);
-    strncpy(content + 32 + 52 * 6 + PAGESIZE - MAXRECORD, ATTRCAT, 7);
-
-    convertIntToByteArray(4, content + 0 + 52 * 7 + PAGESIZE - MAXRECORD);
-    convertIntToByteArray(4, content + 4 + 52 * 7 + PAGESIZE - MAXRECORD);
-    convertIntToByteArray(INTEGER, content + 8 + 52 * 7 + PAGESIZE - MAXRECORD);
-    strncpy(content + 12 + 52 * 7 + PAGESIZE - MAXRECORD, "length", 6);
-    strncpy(content + 32 + 52 * 7 + PAGESIZE - MAXRECORD, ATTRCAT, 7);
-
-    convertIntToByteArray(8, content + 0 + 52 * 8 + PAGESIZE - MAXRECORD);
-    convertIntToByteArray(4, content + 4 + 52 * 8 + PAGESIZE - MAXRECORD);
-    convertIntToByteArray(INTEGER, content + 8 + 52 * 8 + PAGESIZE - MAXRECORD);
-    strncpy(content + 12 + 52 * 8 + PAGESIZE - MAXRECORD, "type", 4);
-    strncpy(content + 32 + 52 * 8 + PAGESIZE - MAXRECORD, ATTRCAT, 7);
-
-    //New Page
-    //Slotmap for Page 2 
-    convertIntToByteArray(0xC0000000, content + PAGESIZE);
-
-    convertIntToByteArray(12, content + 0 + PAGESIZE * 2 - MAXRECORD);
-    convertIntToByteArray(20, content + 4 + PAGESIZE * 2 - MAXRECORD);
-    convertIntToByteArray(STRING, content + 8 + PAGESIZE * 2 - MAXRECORD);
-    strncpy(content + 12 + PAGESIZE * 2 - MAXRECORD, "attrName", 8);
-    strncpy(content + 32 + PAGESIZE * 2 - MAXRECORD, ATTRCAT, 7);
-
-    convertIntToByteArray(32, content + 0 + 52 + PAGESIZE * 2 - MAXRECORD);
-    convertIntToByteArray(20, content + 4 + 52 + PAGESIZE * 2 - MAXRECORD);
-    convertIntToByteArray(STRING, content + 8 + 52 + PAGESIZE * 2 - MAXRECORD);
-    strncpy(content + 12 + 52 + PAGESIZE * 2 - MAXRECORD, "relName", 7);
-    strncpy(content + 32 + 52 + PAGESIZE * 2 - MAXRECORD, ATTRCAT, 7);
-
-    fwrite(content, 1, PAGESIZE * 2, filePointer);
-
+    if (filePointer == NULL)
+        return ErrorMsgs(FILE_SYSTEM_ERROR, g_PrintFlag);
+    fwrite(pages, 1, PAGESIZE * pageCount, filePointer);
     fclose(filePointer);
     return OK;
 }

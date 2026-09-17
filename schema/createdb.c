@@ -24,7 +24,11 @@ int CreateDB(int argc, char **argv) {
 
     chdir(dbPath);
 
+#ifdef _WIN32
+    if (mkdir(dbName) == -1) {
+#else
     if (mkdir(dbName, S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH) == -1) {
+#endif
         chdir(g_InvokedDirectory);
         if (errno == EEXIST) {
             return ErrorMsgs(DB_ALREADY_EXISTS, g_PrintFlag);

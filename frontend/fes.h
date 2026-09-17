@@ -93,6 +93,7 @@
 #define WHERE		308
 #define AND		309
 #define FOR		310
+#define UNIQUE		311
 
 #define	ONE		1		/* action codes */
 #define	DONE		0
@@ -101,6 +102,7 @@
 #define	THROW		-4
 #define INC		-5
 #define INC2		-6
+#define MARKUNIQUE	-7
 
 #define RESULTARG	1		/* arguments position		      */
 #define	STDARG		2

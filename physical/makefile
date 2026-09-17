@@ -22,12 +22,12 @@ CFLAGS = -g $(DFLAG) -I$(INCLUDE)
 # "#ifdef" for more details
 
 SRCS = \
-	error.c createcats.c opencats.c closecats.c openrel.c closerel.c findrelnum.c \
+	error.c catalog.c createcats.c opencats.c closecats.c openrel.c closerel.c findrelnum.c \
 	readpage.c flushpage.c writerec.c findrec.c getnextrec.c insertrec.c deleterec.c \
 	helpers.c
 
 OBJ = \
-	error.o createcats.o opencats.o closecats.o openrel.o closerel.o findrelnum.o \
+	error.o catalog.o createcats.o opencats.o closecats.o openrel.o closerel.o findrelnum.o \
 	readpage.o flushpage.o writerec.o findrec.o getnextrec.o insertrec.o deleterec.o \
 	helpers.o
 
@@ -42,11 +42,12 @@ PHYSICAL.o : $(OBJ)
 $(OBJ) : $(INCLUDE)/globals.h $(INCLUDE)/defs.h $(INCLUDE)/error.h
 
 error.o : $(INCLUDE)/error.h
+catalog.o : $(INCLUDE)/catalog.h
 createcats.o : $(INCLUDE)/createcats.h
-opencats.o : $(INCLUDE)/opencats.h
+opencats.o : $(INCLUDE)/opencats.h $(INCLUDE)/catalog.h
 closecats.o : $(INCLUDE)/closecats.h
-openrel.o : $(INCLUDE)/openrel.h
-closerel.o : $(INCLUDE)/closerel.h
+openrel.o : $(INCLUDE)/openrel.h $(INCLUDE)/catalog.h
+closerel.o : $(INCLUDE)/closerel.h $(INCLUDE)/catalog.h
 findrelnum.o : $(INCLUDE)/findrelnum.h
 readpage.o : $(INCLUDE)/readpage.h
 flushpage.o : $(INCLUDE)/flushpage.h 
@@ -69,4 +70,3 @@ splint:
 
 clean:  # remove all .o files and other garbage
 	rm *.o
-

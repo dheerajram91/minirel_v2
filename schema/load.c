@@ -63,11 +63,15 @@ int Load(int argc, char **argv) {
     g_CheckDuplicateTuples = NOTOK;
     while (read(fd, newRec, recLength) == recLength) {
         if (InsertRec(relNum, newRec) != OK) {
+            g_CheckDuplicateTuples = OK;
+            close(fd);
+            free(newRec);
             return NOTOK;
         }
     }
     g_CheckDuplicateTuples = OK;
+    close(fd);
+    free(newRec);
 
     return OK; /* all's fine */
 }
-

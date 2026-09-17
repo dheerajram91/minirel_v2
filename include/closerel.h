@@ -15,6 +15,7 @@
 #include "flushpage.h"
 #include "findrec.h"
 #include "writerec.h"
+#include "catalog.h"
 
 #include <stdio.h>
 #include <unistd.h>

@@ -44,6 +44,7 @@
 #define PAGE_OVERFLOW               134     /* Record length is greater than MAXRECORD */
 #define INSUFFICIENT_ATTRS          135     /* Number of attributes passed is less */
 #define ATTR_REPEATED               136     /* Insert received same attribute more than once*/
+#define UNIQUE_CONSTRAINT_VIOLATION 137     /* A value already exists for a unique attribute */
 
 int ErrorMsgs(int errorId, int printFlag);
 

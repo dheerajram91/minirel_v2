@@ -108,33 +108,32 @@ Rid getLastRid(int relNum) {
  */
 
 int separateDBPath(char* fullDBPath, char* path, char* dbName) {
-
-    char fullDBPathCopy[MAXPATH];
-    strcpy(fullDBPathCopy, fullDBPath);
-
-    char *temp = strtok(fullDBPathCopy, "/");
-    strcpy(dbName, temp);
-    if (fullDBPath[0] == '/') {
-        strcpy(path, "/");
-    } else {
-        strcpy(path, "");
-    }
-
     if (fullDBPath == NULL)
         return NOTOK;
 
-    if (strlen(temp) != strlen(fullDBPath)) {
-        while ((temp = strtok(NULL, "/")) != NULL) {
-            strcat(path, dbName);
-            strcat(path, "/");
+    char *separator = strrchr(fullDBPath, '/');
+#ifdef _WIN32
+    char *windowsSeparator = strrchr(fullDBPath, '\\');
+    if (windowsSeparator != NULL && (separator == NULL || windowsSeparator > separator)) {
+        separator = windowsSeparator;
+    }
+#endif
 
-            strcpy(dbName, temp);
+    if (separator == NULL) {
+        strcpy(path, ".");
+        strcpy(dbName, fullDBPath);
+    } else {
+        int pathLength = separator - fullDBPath;
+        if (pathLength == 0) {
+            pathLength = 1;
         }
+        strncpy(path, fullDBPath, pathLength);
+        path[pathLength] = '\0';
+        strcpy(dbName, separator + 1);
     }
 
     if (strlen(dbName) > RELNAME)
         return ErrorMsgs(DBNAME_EXCEED_LIMIT, g_PrintFlag);
-    path[strlen(path) - 1] = '\0';
     return OK;
 }
 
