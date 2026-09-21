@@ -64,19 +64,22 @@ static int OpenCatsUnlocked() {
     g_CatCache[0].recLength = RELCAT_RECORD_SIZE;
     g_CatCache[0].recsPerPg = MAXRECORD / RELCAT_RECORD_SIZE;
     g_CatCache[0].numAttrs = RELCAT_ATTRIBUTE_COUNT;
+    g_CatCache[0].nullBitmapBytes = 0;
+    g_CatCache[0].hasNullBitmap = FALSE;
 
     g_CatCache[0].numRecs = 2;
     g_CatCache[0].numPgs = 1;
 
     g_CatCache[0].relcatRid.pid = 1;
     g_CatCache[0].relcatRid.slotnum = 1;
-    g_CatCache[0].relFile = open(RELCAT, O_RDWR);
+    g_CatCache[0].relFile = open(RELCAT, O_RDWR | MINIREL_BINARY_FLAG);
     g_CatCache[0].lockId = NOTOK;
     g_CatCache[0].lockMode = LOCK_NONE;
     g_CatCache[0].dirty = FALSE;
     g_CatCache[0].attrList = createAttributeCatalogRelCat();
 
-    returnValue = FindRec(0, &startRid, &foundRid, &recPtr, STRING, RELNAME, 0, RELCAT, EQ);
+    returnValue = FindRec(
+            0, &startRid, &foundRid, &recPtr, STRING, RELNAME, 0, RELCAT, EQ, FALSE);
     if (returnValue == NOTOK) {
         return ErrorMsgs(NO_CATALOG_FOUND, g_PrintFlag);
     }
@@ -91,19 +94,22 @@ static int OpenCatsUnlocked() {
     g_CatCache[1].recLength = ATTRCAT_RECORD_SIZE;
     g_CatCache[1].recsPerPg = MAXRECORD / ATTRCAT_RECORD_SIZE;
     g_CatCache[1].numAttrs = ATTRCAT_ATTRIBUTE_COUNT;
+    g_CatCache[1].nullBitmapBytes = 0;
+    g_CatCache[1].hasNullBitmap = FALSE;
 
     g_CatCache[1].numRecs = SYSTEM_ATTRIBUTE_COUNT;
     g_CatCache[1].numPgs = 2;
 
     g_CatCache[1].relcatRid.pid = 1;
     g_CatCache[1].relcatRid.slotnum = 2;
-    g_CatCache[1].relFile = open(ATTRCAT, O_RDWR);
+    g_CatCache[1].relFile = open(ATTRCAT, O_RDWR | MINIREL_BINARY_FLAG);
     g_CatCache[1].lockId = NOTOK;
     g_CatCache[1].lockMode = LOCK_NONE;
     g_CatCache[1].dirty = FALSE;
     g_CatCache[1].attrList = createAttributeCatalogAttrCat();
 
-    returnValue = FindRec(0, &startRid, &foundRid, &recPtr, STRING, RELNAME, 0, ATTRCAT, EQ);
+    returnValue = FindRec(
+            0, &startRid, &foundRid, &recPtr, STRING, RELNAME, 0, ATTRCAT, EQ, FALSE);
     if (returnValue == NOTOK) {
         return ErrorMsgs(NO_CATALOG_FOUND, g_PrintFlag);
     }

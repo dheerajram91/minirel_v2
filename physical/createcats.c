@@ -27,6 +27,7 @@ static void InitializeAttributeRecord(
     record->unique = definition->unique;
     record->notNull = definition->notNull;
     record->primaryKey = definition->primaryKey;
+    record->nullBitmapStorage = FALSE;
     strncpy(record->attrName, definition->name, RELNAME);
     strncpy(record->relName, relationName, RELNAME);
 }

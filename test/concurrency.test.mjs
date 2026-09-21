@@ -13,6 +13,7 @@ import {
 function startSession(workingDirectory) {
   const child = spawn(defaultBinaryPath(), [], {
     cwd: workingDirectory,
+    env: { ...process.env, MINIREL_DATA_DIR: "." },
     stdio: ["pipe", "pipe", "pipe"],
   });
   let output = "";

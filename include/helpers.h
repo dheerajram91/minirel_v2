@@ -11,6 +11,9 @@
 #include <string.h>
 #include <stdlib.h>
 #include <ctype.h>
+#include <errno.h>
+#include <limits.h>
+#include <math.h>
 
 #include "globals.h"
 #include "defs.h"
@@ -45,5 +48,40 @@ int getN(char *sN);
 int isValidString(char *string);
 
 int getSizeOfAttr(char *attrFormat);
+
+unsigned int NullBitmapSize(unsigned int attributeCount);
+
+bool IsNullValueMarker(const char *text);
+
+bool RecordAttributeIsNull(
+        const CacheEntry *relation,
+        const char *record,
+        const struct attrCatalog *attribute);
+
+void RecordSetAttributeNull(
+        const CacheEntry *relation,
+        char *record,
+        const struct attrCatalog *attribute);
+
+void RecordClearAttributeNull(
+        const CacheEntry *relation,
+        char *record,
+        const struct attrCatalog *attribute);
+
+int EncodeTextValue(
+        const struct attrCatalog *attribute,
+        const char *text,
+        char *destination,
+        bool *isNull);
+
+int ValidateRecordForRelation(const CacheEntry *relation, const char *record);
+
+int CopyRecordAttribute(
+        const CacheEntry *destinationRelation,
+        char *destinationRecord,
+        const struct attrCatalog *destinationAttribute,
+        const CacheEntry *sourceRelation,
+        const char *sourceRecord,
+        const struct attrCatalog *sourceAttribute);
 
 #endif /* HELPERS_H_ */

@@ -4,6 +4,14 @@
 #ifndef DEFS_H_
 #define DEFS_H_
 
+#include <fcntl.h>
+
+#ifdef _WIN32
+#define MINIREL_BINARY_FLAG O_BINARY
+#else
+#define MINIREL_BINARY_FLAG 0
+#endif
+
 /*************************************************************
         CONSTANTS
 *************************************************************/
@@ -24,6 +32,8 @@
 #define RELCAT_CACHE    0
 #define ATTRCAT_CACHE   1
 #define MAX_STRING_SIZE 50
+
+#define NULL_VALUE_MARKER "\x1dMINIREL_NULL"
 
 /*************************************************************
         COMPARISON OPERATORS

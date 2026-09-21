@@ -45,37 +45,44 @@
  */
 
 int Select(int argc, char **argv) {
+    int relNum;
+    int newRelNum;
+    int numAttrs;
+    int count;
+    int retVal;
+    int createArgCount;
+    struct attrCatalog *head;
+    struct attrCatalog *conditionAttribute = NULL;
+    struct attrCatalog *sourceAttribute;
+    struct attrCatalog *destinationAttribute;
+    Rid startRid = { 1, 0 };
+    Rid *foundRid;
+    char **createArgumentList;
+    char *recPtr;
+    char *conditionValue;
+    bool conditionIsNull;
+
     if (g_DBOpenFlag != OK) {
         return ErrorMsgs(DB_NOT_OPEN, g_PrintFlag);
     }
-    int relNum, newRelNum, numAttrs, count, i, retVal, offset, attrFoundFlag = 0;
-    int attrSize, intVal;
-    float floatVal;
-    struct attrCatalog* head;
-    datatype type;
-    Rid startRid = { 1, 0 }, *foundRid;
-    char **createArgumentList, *recPtr;
 
     if (argc < 6)
         return ErrorMsgs(ARGC_INSUFFICIENT, g_PrintFlag);
 
-    if (OpenRel(argv[2]) == NOTOK)
-        return ErrorMsgs(RELNOEXIST, g_PrintFlag);
-    /* Finding the relNum of Source Relation */
-    relNum = FindRelNum(argv[2]);
+    relNum = OpenRel(argv[2]);
+    if (relNum == NOTOK)
+        return NOTOK;
 
     head = g_CatCache[relNum].attrList;
     numAttrs = g_CatCache[relNum].numAttrs;
+    conditionAttribute = getAttrCatalog(head, argv[3]);
+    if (conditionAttribute == NULL)
+        return ErrorMsgs(ATTRNOEXIST, g_PrintFlag);
 
-    /* Preparing Argument list which should be passed to Create() */
-    createArgumentList = malloc(sizeof(char*) * (numAttrs + 1) * 2);
-    createArgumentList[0] = malloc(sizeof(char) * RELNAME);
-    createArgumentList[1] = malloc(sizeof(char) * RELNAME);
-
-    for (count = 2; count < (numAttrs + 1) * 2; count++) {
-        createArgumentList[count] = malloc(sizeof(char) * RELNAME);
-        createArgumentList[count + 1] = malloc(sizeof(char) * 4);
-    }
+    createArgCount = (numAttrs + 1) * 2;
+    createArgumentList = (char **) calloc(createArgCount, sizeof(char *));
+    for (count = 0; count < createArgCount; count++)
+        createArgumentList[count] = (char *) calloc(RELNAME, 1);
 
     strcpy(createArgumentList[0], "create");
     strcpy(createArgumentList[1], argv[1]);
@@ -93,51 +100,71 @@ int Select(int argc, char **argv) {
                 strcpy(createArgumentList[count + 1], "f");
                 break;
         }
-        /* This is to catch the desired attribute's specifications from Source relation. 
-         Expected to happen only once in this loop */
-        if (strcmp(head->attrName, argv[3]) == 0) {
-            attrFoundFlag = 1;
-            offset = head->offset;
-            type = head->type;
-            attrSize = head->length;
-        }
         head = head->next;
         count = count + 2;
     }
-    /* Given attribute name never appeared in attr linkedlist */
-    if (attrFoundFlag == 0)
-        return ErrorMsgs(ATTRNOEXIST, g_PrintFlag);
 
-    retVal = Create((numAttrs + 1) * 2, createArgumentList);
-
-    for (i = 0; i < (numAttrs + 1) * 2; i++)
-        free(createArgumentList[i]);
-    free(createArgumentList);
+    retVal = Create(createArgCount, createArgumentList);
+    freeAllottedMem(createArgumentList, createArgCount);
 
     if (retVal == NOTOK)
         return NOTOK;
 
-    OpenRelWithLock(argv[1], LOCK_EXCLUSIVE);
-    newRelNum = FindRelNum(argv[1]);
+    newRelNum = OpenRelWithLock(argv[1], LOCK_EXCLUSIVE);
+    if (newRelNum == NOTOK)
+        return NOTOK;
 
-    switch (type) {
-        case STRING:
-            break;
-        case INTEGER:
-            intVal = atoi(argv[5]);
-            convertIntToByteArray(intVal, argv[5]);
-            break;
-        case FLOAT:
-            floatVal = atof(argv[5]);
-            convertFloatToByteArray(floatVal, argv[5]);
-            break;
+    conditionValue = (char *) calloc(conditionAttribute->length, 1);
+    if (EncodeTextValue(
+            conditionAttribute,
+            argv[5],
+            conditionValue,
+            &conditionIsNull) != OK) {
+        free(conditionValue);
+        return NOTOK;
     }
-    /* Finding record from Source, which satisfying given condition, and Adding to Result Relation*/
-    while (FindRec(relNum, &startRid, &foundRid, &recPtr, type, attrSize, offset, argv[5],
-            readIntFromByteArray(argv[4], 0)) == OK) {
-        InsertRec(newRelNum, recPtr);
+
+    while (FindRec(
+            relNum,
+            &startRid,
+            &foundRid,
+            &recPtr,
+            conditionAttribute->type,
+            conditionAttribute->length,
+            conditionAttribute->offset,
+            conditionValue,
+            readIntFromByteArray(argv[4], 0),
+            conditionIsNull) == OK) {
+        char *destinationRecord = (char *) calloc(
+                g_CatCache[newRelNum].recLength, 1);
+        sourceAttribute = g_CatCache[relNum].attrList;
+        destinationAttribute = g_CatCache[newRelNum].attrList;
+        while (sourceAttribute != NULL && destinationAttribute != NULL) {
+            if (CopyRecordAttribute(
+                    &g_CatCache[newRelNum],
+                    destinationRecord,
+                    destinationAttribute,
+                    &g_CatCache[relNum],
+                    recPtr,
+                    sourceAttribute) != OK) {
+                free(destinationRecord);
+                free(foundRid);
+                free(conditionValue);
+                return NOTOK;
+            }
+            sourceAttribute = sourceAttribute->next;
+            destinationAttribute = destinationAttribute->next;
+        }
+        if (InsertRec(newRelNum, destinationRecord) != OK) {
+            free(destinationRecord);
+            free(foundRid);
+            free(conditionValue);
+            return NOTOK;
+        }
+        free(destinationRecord);
         startRid = (*foundRid);
         free(foundRid);
     }
+    free(conditionValue);
     return OK;
 }

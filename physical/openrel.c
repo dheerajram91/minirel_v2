@@ -49,7 +49,10 @@ int OpenRelWithLock(char* relName, LockMode mode) {
     AttrCatalogRecord attributeRecord;
     struct attrCatalog *temp = NULL, *newNode = NULL;
     bool isFirstExecution = TRUE;
+    bool storageFormatKnown = FALSE;
+    bool expectedNullBitmapStorage = FALSE;
     int i, returnVal;
+    unsigned int attributePosition = 0;
     for (i = 0; i < MAXOPEN; i++) {
         if (g_CacheInUse[i] == TRUE && strcmp(g_CatCache[i].relName, relName) == 0) {
             if (i >= 2 && g_CatCache[i].lockMode < mode) {
@@ -81,7 +84,7 @@ int OpenRelWithLock(char* relName, LockMode mode) {
     startRid.slotnum = 0;
 
     returnVal = FindRec(RELCAT_CACHE, &startRid, &foundRid, &byteArray, 's', RELNAME, 0, relName,
-    EQ);
+    EQ, FALSE);
 
     if (returnVal == NOTOK) {
         ReleaseManagedLock(catalogLock);
@@ -133,13 +136,16 @@ int OpenRelWithLock(char* relName, LockMode mode) {
         g_CatCache[i].numAttrs = relationRecord.numAttrs;
         g_CatCache[i].numRecs = relationRecord.numRecs;
         g_CatCache[i].numPgs = relationRecord.numPgs;
+        g_CatCache[i].nullBitmapBytes = 0;
+        g_CatCache[i].hasNullBitmap = FALSE;
 
         g_CatCache[i].relcatRid = *foundRid;
         g_CatCache[i].dirty = FALSE;
         g_CatCache[i].lockId = tableLock;
         g_CatCache[i].lockMode = mode;
 
-        g_CatCache[i].relFile = open(relName, O_RDWR);
+        g_CatCache[i].relFile = open(
+                relName, O_RDWR | MINIREL_BINARY_FLAG);
         if (g_CatCache[i].relFile < 0) {
             g_CacheInUse[i] = FALSE;
             ReleaseManagedLock(catalogLock);
@@ -151,7 +157,7 @@ int OpenRelWithLock(char* relName, LockMode mode) {
         startRid.slotnum = 0;
 
         returnVal = FindRec(ATTRCAT_CACHE, &startRid, &foundRid, &byteArray, 's', RELNAME, 32,
-                relName, EQ);
+                relName, EQ, FALSE);
 
         if (returnVal == NOTOK) {
             close(g_CatCache[i].relFile);
@@ -162,8 +168,23 @@ int OpenRelWithLock(char* relName, LockMode mode) {
         }
 
         while (returnVal == OK) {
-            newNode = malloc(sizeof(struct attrCatalog));
+            DecodeAttrCatalogRecord(byteArray, &attributeRecord);
+            if (storageFormatKnown == FALSE) {
+                expectedNullBitmapStorage = attributeRecord.nullBitmapStorage;
+                storageFormatKnown = TRUE;
+            } else if (attributeRecord.nullBitmapStorage
+                    != expectedNullBitmapStorage) {
+                CloseRel(i);
+                ReleaseManagedLock(catalogLock);
+                return ErrorMsgs(INVALID_NULL_BITMAP, g_PrintFlag);
+            }
 
+            newNode = calloc(1, sizeof(struct attrCatalog));
+            if (newNode == NULL) {
+                CloseRel(i);
+                ReleaseManagedLock(catalogLock);
+                return ErrorMsgs(FILE_SYSTEM_ERROR, g_PrintFlag);
+            }
             if (isFirstExecution == TRUE) {
                 g_CatCache[i].attrList = newNode;
                 temp = newNode;
@@ -173,21 +194,32 @@ int OpenRelWithLock(char* relName, LockMode mode) {
                 temp = newNode;
             }
 
-            DecodeAttrCatalogRecord(byteArray, &attributeRecord);
             temp->offset = attributeRecord.offset;
             temp->length = attributeRecord.length;
             temp->type = attributeRecord.type;
             temp->unique = attributeRecord.unique;
             temp->notNull = attributeRecord.notNull;
             temp->primaryKey = attributeRecord.primaryKey;
+            temp->position = attributePosition++;
             strcpy(temp->attrName, attributeRecord.attrName);
             strcpy(temp->relName, attributeRecord.relName);
             temp->next = NULL;
+            if (attributeRecord.nullBitmapStorage == TRUE) {
+                g_CatCache[i].hasNullBitmap = TRUE;
+            }
 
             startRid = *foundRid;
             free(foundRid);
             returnVal = FindRec(ATTRCAT_CACHE, &startRid, &foundRid, &byteArray, 's', RELNAME, 32,
-                    relName, EQ);
+                    relName, EQ, FALSE);
+        }
+        if (g_CatCache[i].hasNullBitmap == TRUE) {
+            g_CatCache[i].nullBitmapBytes = NullBitmapSize(g_CatCache[i].numAttrs);
+            if (g_CatCache[i].recLength < g_CatCache[i].nullBitmapBytes) {
+                CloseRel(i);
+                ReleaseManagedLock(catalogLock);
+                return ErrorMsgs(INVALID_NULL_BITMAP, g_PrintFlag);
+            }
         }
         ReleaseManagedLock(catalogLock);
         return i;

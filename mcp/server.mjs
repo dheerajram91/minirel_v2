@@ -97,7 +97,9 @@ server.registerTool(
       workingDirectory: z
         .string()
         .optional()
-        .describe("Directory used for relative database and data-file paths."),
+        .describe(
+          "Optional database directory override. Omit it or pass the repository root to use the ignored DB directory.",
+        ),
       timeoutMs: z.number().int().min(100).max(120_000).default(30_000),
     }),
   },
@@ -121,7 +123,12 @@ server.registerTool(
     description:
       "Find MINIREL databases under a directory and report each database's table names and record counts.",
     inputSchema: z.object({
-      workingDirectory: z.string().optional(),
+      workingDirectory: z
+        .string()
+        .optional()
+        .describe(
+          "Optional database directory override. The repository root resolves to its ignored DB directory.",
+        ),
     }),
   },
   async ({ workingDirectory }) => {
@@ -160,7 +167,12 @@ server.registerTool(
       "Inspect one MINIREL database and return table names, column schemas, constraints, record counts, page counts, and storage sizes.",
     inputSchema: z.object({
       database: z.string().min(1),
-      workingDirectory: z.string().optional(),
+      workingDirectory: z
+        .string()
+        .optional()
+        .describe(
+          "Optional database directory override. The repository root resolves to its ignored DB directory.",
+        ),
       includeSystemTables: z.boolean().default(false),
     }),
   },
@@ -211,7 +223,12 @@ server.registerTool(
     inputSchema: z.object({
       database: z.string().min(1),
       commands: z.array(z.string().min(1)).min(1),
-      workingDirectory: z.string().optional(),
+      workingDirectory: z
+        .string()
+        .optional()
+        .describe(
+          "Optional database directory override. The repository root resolves to its ignored DB directory.",
+        ),
       timeoutMs: z.number().int().min(100).max(120_000).default(30_000),
     }),
   },

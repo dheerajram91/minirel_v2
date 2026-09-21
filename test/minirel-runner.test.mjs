@@ -6,10 +6,23 @@ import path from "node:path";
 import test from "node:test";
 
 import {
+  defaultDataDirectory,
   getMinirelStatus,
   normalizeScript,
+  resolveWorkingDirectory,
   runMinirelScript,
 } from "../mcp/minirel-runner.mjs";
+
+test("default database storage uses the repository DB directory", () => {
+  assert.equal(defaultDataDirectory(), path.resolve("DB"));
+});
+
+test("repository working-directory overrides still use DB", async () => {
+  assert.equal(
+    await resolveWorkingDirectory(path.resolve(".")),
+    path.resolve("DB"),
+  );
+});
 
 test("normalizeScript appends a missing semicolon and quit command", () => {
   assert.equal(normalizeScript("print students"), "print students;\nquit;\n");
@@ -45,6 +58,13 @@ test("catalog refactor preserves the existing binary format", async (context) =>
       script: "createdb catalogtest;",
     });
     assert.deepEqual(result.errors, []);
+    assert.equal(
+      await readFile(
+        path.join(workingDirectory, "catalogtest", ".gitignore"),
+        "utf8",
+      ),
+      "# MINIREL runtime database files\n*\n",
+    );
 
     for (const [name, expectedHash] of Object.entries(expectedHashes)) {
       const contents = await readFile(

@@ -36,6 +36,9 @@ int InsertRec(const int relNum, char*recPtr) {
     if (recPtr == NULL) {
         return ErrorMsgs(NULL_ARGUMENT_RECEIVED, g_PrintFlag);
     }
+    if (ValidateRecordForRelation(&g_CatCache[relNum], recPtr) != OK) {
+        return NOTOK;
+    }
 
     /* Checking for duplicate tuples and unique attribute values */
     Rid *fRid, sRid = { 0, 0 };
@@ -54,6 +57,10 @@ int InsertRec(const int relNum, char*recPtr) {
         if (hasUniqueAttribute == TRUE) {
             for (attr = g_CatCache[relNum].attrList; attr != NULL; attr = attr->next) {
                 if (attr->unique == TRUE
+                        && RecordAttributeIsNull(
+                                &g_CatCache[relNum], record, attr) == FALSE
+                        && RecordAttributeIsNull(
+                                &g_CatCache[relNum], recPtr, attr) == FALSE
                         && memcmp(record + attr->offset, recPtr + attr->offset,
                                 attr->length) == 0) {
                     int errorId = attr->primaryKey == TRUE

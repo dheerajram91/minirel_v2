@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdir, mkdtemp, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, stat } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -16,6 +16,8 @@ function textContent(result) {
 
 test("consolidated MCP tools discover and transact with MINIREL", async () => {
   const workingDirectory = await mkdtemp(path.join(os.tmpdir(), "minirel-mcp-"));
+  const rootMappedDatabase = "mcprootmapping";
+  const rootMappedPath = path.resolve("DB", rootMappedDatabase);
   const client = new Client(
     { name: "minirel-test", version: "1.0.0" },
     { versionNegotiation: { mode: "auto" } },
@@ -131,6 +133,7 @@ test("consolidated MCP tools discover and transact with MINIREL", async () => {
         unique: true,
         notNull: true,
         primaryKey: true,
+        nullable: false,
       },
       {
         offset: 4,
@@ -140,8 +143,12 @@ test("consolidated MCP tools discover and transact with MINIREL", async () => {
         unique: false,
         notNull: true,
         primaryKey: false,
+        nullable: false,
       },
     ]);
+    assert.equal(students.recordFormat, "null-bitmap-v1");
+    assert.equal(students.nullBitmapBytes, 1);
+    assert.equal(students.dataLength, 28);
 
     const failedTransaction = await client.callTool({
       name: "execute_transaction",
@@ -202,8 +209,33 @@ test("consolidated MCP tools discover and transact with MINIREL", async () => {
     });
     assert.equal(Boolean(invalidDiscovery.isError), true);
     assert.match(textContent(invalidDiscovery), /ENOENT/);
+    const rootMappedCreate = await client.callTool({
+      name: "run_minirel_commands",
+      arguments: {
+        workingDirectory: path.resolve("."),
+        commands: [`createdb ${rootMappedDatabase}`],
+      },
+    });
+    assert.equal(Boolean(rootMappedCreate.isError), false);
+    assert.equal(
+      (
+        await stat(
+          path.resolve("DB", rootMappedDatabase, "relcat"),
+        )
+      ).isFile(),
+      true,
+    );
+    const rootMappedDestroy = await client.callTool({
+      name: "run_minirel_commands",
+      arguments: {
+        workingDirectory: path.resolve("."),
+        commands: [`destroydb ${rootMappedDatabase}`],
+      },
+    });
+    assert.equal(Boolean(rootMappedDestroy.isError), false);
   } finally {
     await client.close();
     await rm(workingDirectory, { recursive: true, force: true });
+    await rm(rootMappedPath, { recursive: true, force: true });
   }
 });

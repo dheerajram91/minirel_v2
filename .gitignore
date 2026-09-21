@@ -27,6 +27,7 @@
 *.out
 *.app
 node_modules/
+/DB/
 
 doc/
 inst/

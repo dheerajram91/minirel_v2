@@ -9,6 +9,12 @@
  * @return OK or NOTOK
  */
 int CreateDB(int argc, char **argv) {
+    static const char ignoreContents[] =
+            "# MINIREL runtime database files\n*\n";
+    FILE *ignoreFile;
+    size_t ignoreBytesWritten;
+    int ignoreCloseResult;
+
     if (argc < 2) {
         return ErrorMsgs(ARGC_INSUFFICIENT, g_PrintFlag);
     }
@@ -37,6 +43,27 @@ int CreateDB(int argc, char **argv) {
         }
     }
     chdir(dbName);
+
+    ignoreFile = fopen(".gitignore", "wb");
+    if (ignoreFile == NULL) {
+        chdir(g_InvokedDirectory);
+        rmdir(argv[1]);
+        return ErrorMsgs(FILE_SYSTEM_ERROR, g_PrintFlag);
+    }
+    ignoreBytesWritten = fwrite(
+            ignoreContents,
+            1,
+            sizeof(ignoreContents) - 1,
+            ignoreFile);
+    ignoreCloseResult = fclose(ignoreFile);
+    if (ignoreBytesWritten != sizeof(ignoreContents) - 1
+            || ignoreCloseResult != 0) {
+        remove(".gitignore");
+        chdir(g_InvokedDirectory);
+        rmdir(argv[1]);
+        return ErrorMsgs(FILE_SYSTEM_ERROR, g_PrintFlag);
+    }
+
     g_DBOpenFlag = OK;
     int returnflag = CreateCats();
 

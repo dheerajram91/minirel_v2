@@ -47,13 +47,15 @@ int Delete(int argc, char **argv) {
         return ErrorMsgs(DB_NOT_OPEN, g_PrintFlag);
     }
     int relNum, numAttrs, i, offset, attrFoundFlag = 0;
-    int attrSize, intVal;
-    float floatVal;
+    int attrSize;
     struct attrCatalog* head;
+    struct attrCatalog* conditionAttribute = NULL;
     datatype type;
     Rid startRid = { 1, 0 }, *foundRid;
 
     char *recPtr;
+    char *conditionValue;
+    bool conditionIsNull;
 
     if (argc < 5)
         return ErrorMsgs(ARGC_INSUFFICIENT, g_PrintFlag);
@@ -79,6 +81,7 @@ int Delete(int argc, char **argv) {
             offset = head->offset;
             type = head->type;
             attrSize = head->length;
+            conditionAttribute = head;
         }
         head = head->next;
     }
@@ -86,24 +89,31 @@ int Delete(int argc, char **argv) {
     if (attrFoundFlag == 0)
         return ErrorMsgs(ATTRNOEXIST, g_PrintFlag);
 
-    switch (type) {
-        case INTEGER:
-            intVal = atoi(argv[4]);
-            convertIntToByteArray(intVal, argv[4]);
-            break;
-        case FLOAT:
-            floatVal = atof(argv[4]);
-            convertFloatToByteArray(floatVal, argv[4]);
-            break;
-        case STRING:
-            break;
+    conditionValue = (char *) calloc(attrSize, 1);
+    if (EncodeTextValue(
+            conditionAttribute,
+            argv[4],
+            conditionValue,
+            &conditionIsNull) != OK) {
+        free(conditionValue);
+        return NOTOK;
     }
     /* Finding record from Relation and deleting corresponding Rid Entry */
-    while (FindRec(relNum, &startRid, &foundRid, &recPtr, type, attrSize, offset, argv[4],
-            readIntFromByteArray(argv[3], 0)) == OK) {
+    while (FindRec(
+            relNum,
+            &startRid,
+            &foundRid,
+            &recPtr,
+            type,
+            attrSize,
+            offset,
+            conditionValue,
+            readIntFromByteArray(argv[3], 0),
+            conditionIsNull) == OK) {
         DeleteRec(relNum, foundRid);
         startRid = (*foundRid);
         free(foundRid);
     }
+    free(conditionValue);
     return OK;
 }

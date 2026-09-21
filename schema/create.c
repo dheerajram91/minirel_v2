@@ -4,6 +4,69 @@
 
 static int CreateUnlocked(int argc, char **argv);
 
+static int ParseAttributeFormat(
+        const char *format,
+        char *type,
+        int *length,
+        int *isUnique,
+        int *isNotNull,
+        int *isPrimaryKey) {
+    int index = 1;
+    int stringLength = 0;
+    bool sawUnique = FALSE;
+    bool sawNotNull = FALSE;
+    bool sawPrimary = FALSE;
+
+    *type = format[0];
+    if (*type == STRING) {
+        int digitStart = index;
+        while (isdigit((unsigned char) format[index])) {
+            if (stringLength > (INT_MAX - 9) / 10) {
+                return ErrorMsgs(MAX_STRING_EXCEEDED, g_PrintFlag);
+            }
+            stringLength = stringLength * 10 + format[index] - '0';
+            index++;
+        }
+        if (index == digitStart || stringLength < 1) {
+            return ErrorMsgs(INVALID_ATTR_TYPE, g_PrintFlag);
+        }
+        if (stringLength > MAX_STRING_SIZE) {
+            return ErrorMsgs(MAX_STRING_EXCEEDED, g_PrintFlag);
+        }
+        *length = stringLength;
+    } else if (*type == INTEGER) {
+        *length = sizeof(int);
+    } else if (*type == FLOAT) {
+        *length = sizeof(float);
+    } else {
+        return ErrorMsgs(INVALID_ATTR_TYPE, g_PrintFlag);
+    }
+
+    while (format[index] != '\0') {
+        if (format[index] == '!') {
+            if (sawUnique == TRUE)
+                return ErrorMsgs(INVALID_ATTR_TYPE, g_PrintFlag);
+            sawUnique = TRUE;
+        } else if (format[index] == '^') {
+            if (sawNotNull == TRUE)
+                return ErrorMsgs(INVALID_ATTR_TYPE, g_PrintFlag);
+            sawNotNull = TRUE;
+        } else if (format[index] == '#') {
+            if (sawPrimary == TRUE)
+                return ErrorMsgs(INVALID_ATTR_TYPE, g_PrintFlag);
+            sawPrimary = TRUE;
+        } else {
+            return ErrorMsgs(INVALID_ATTR_TYPE, g_PrintFlag);
+        }
+        index++;
+    }
+
+    *isPrimaryKey = sawPrimary;
+    *isUnique = sawUnique || sawPrimary;
+    *isNotNull = sawNotNull || sawPrimary;
+    return OK;
+}
+
 /**
  * This routine creates a new relation with the specified name and attributes
  *
@@ -81,20 +144,47 @@ static int CreateUnlocked(int argc, char **argv) {
     }
 
     int offset, length, i, isUnique, isNotNull, isPrimaryKey, primaryKeyCount;
-    char type, attrName[RELNAME], relName[RELNAME], attrFormat[16];
+    int bitmapBytes, recordLength;
+    int projectedDataLength = 0;
+    char type, attrName[RELNAME], relName[RELNAME];
 
     if (isValidString(argv[1]) == NOTOK) {
         return ErrorMsgs(INVALID_ATTR_NAME, g_PrintFlag);
     }
+    if (argc < 4 || argc % 2 != 0) {
+        return ErrorMsgs(ARGC_INSUFFICIENT, g_PrintFlag);
+    }
     strcpy(relName, argv[1]);
 
     primaryKeyCount = 0;
-    for (i = 3; i < argc; i += 2) {
-        if (strchr(argv[i], '#') != NULL)
+    for (i = 2; i < argc; i += 2) {
+        int j;
+        if (isValidString(argv[i]) == NOTOK) {
+            return ErrorMsgs(INVALID_ATTR_NAME, g_PrintFlag);
+        }
+        for (j = 2; j < i; j += 2) {
+            if (strcmp(argv[i], argv[j]) == 0) {
+                return ErrorMsgs(ATTR_REPEATED, g_PrintFlag);
+            }
+        }
+        if (ParseAttributeFormat(
+                argv[i + 1],
+                &type,
+                &length,
+                &isUnique,
+                &isNotNull,
+                &isPrimaryKey) != OK) {
+            return NOTOK;
+        }
+        projectedDataLength += length;
+        if (isPrimaryKey)
             primaryKeyCount++;
     }
     if (primaryKeyCount > 1)
         return ErrorMsgs(MULTIPLE_PRIMARY_KEYS, g_PrintFlag);
+    bitmapBytes = NullBitmapSize((argc - 2) / 2);
+    if (projectedDataLength + bitmapBytes > MAXRECORD)
+        return ErrorMsgs(PAGE_OVERFLOW, g_PrintFlag);
 
     /* To check if relation exists, we will call openRel
      * after turning off the error print flag temporarily. */
@@ -114,22 +204,15 @@ static int CreateUnlocked(int argc, char **argv) {
     int numAttrs;
     /* Iterate through each attribute and insert it to attrcat table */
     for (i = 2, numAttrs = 0, offset = 0; i < argc; i = i + 2, numAttrs++) {
+        memset(attrName, 0, sizeof(attrName));
         strncpy(attrName, argv[i], RELNAME - 1);
-
-        strcpy(attrFormat, argv[i + 1]);
-        type = attrFormat[0];
-        isPrimaryKey = strchr(attrFormat, '#') != NULL;
-        isUnique = isPrimaryKey || strchr(attrFormat, '!') != NULL;
-        isNotNull = isPrimaryKey || strchr(attrFormat, '^') != NULL;
-        if (type != INTEGER && type != STRING && type != FLOAT) {
-            deleteAttrCatEntries(relName);
-            return ErrorMsgs(INVALID_ATTR_TYPE, g_PrintFlag);
-        }
-        length = getSizeOfAttr(attrFormat);
-        if (length > MAX_STRING_SIZE) {
-            deleteAttrCatEntries(relName);
-            return ErrorMsgs(MAX_STRING_EXCEEDED, g_PrintFlag);
-        }
+        ParseAttributeFormat(
+                argv[i + 1],
+                &type,
+                &length,
+                &isUnique,
+                &isNotNull,
+                &isPrimaryKey);
         int j;
 
         /* Filling the attribute catalog record template */
@@ -140,7 +223,8 @@ static int CreateUnlocked(int argc, char **argv) {
                 sprintf(
                         attrCatArgs[j + 1],
                         "%d",
-                        EncodeAttributeType(type, isUnique, isNotNull, isPrimaryKey));
+                        EncodeAttributeType(type, isUnique, isNotNull, isPrimaryKey)
+                                | NULL_BITMAP_STORAGE_FLAG);
             } else if (strcmp(attrCatArgs[j], LENGTH) == 0) {
                 sprintf(attrCatArgs[j + 1], "%d", length);
             } else if (strcmp(attrCatArgs[j], ATTRNAME) == 0) {
@@ -150,7 +234,7 @@ static int CreateUnlocked(int argc, char **argv) {
             }
         }
         offset += length;
-        if (offset > MAXRECORD) {
+        if (offset + bitmapBytes > MAXRECORD) {
             char **destroy_args = (char **) malloc(sizeof(char*) * 2);
             destroy_args[0] = (char *) malloc(sizeof(char) * (strlen(_DESTROY) + 1));
             destroy_args[1] = (char *) malloc(sizeof(char) * (strlen(relName) + 1));
@@ -167,6 +251,7 @@ static int CreateUnlocked(int argc, char **argv) {
 
     /* Free the attrCatArgs*/
     freeAllottedMem(attrCatArgs, attrCatArraySize);
+    recordLength = offset + bitmapBytes;
 
     /* Insert the data into relcat */
     char **relcatArgs;
@@ -175,11 +260,13 @@ static int CreateUnlocked(int argc, char **argv) {
 
     //Fill the template
     int j, recsPerPg;
-    recsPerPg = (MAXRECORD / offset) < 32 ? (MAXRECORD / offset) : 32;
+    recsPerPg = (MAXRECORD / recordLength) < 32
+            ? (MAXRECORD / recordLength)
+            : 32;
 
     for (j = 2; j < relcatArraySize; j += 2) {
         if (strcmp(relcatArgs[j], RECLENGTH) == 0) {
-            sprintf(relcatArgs[j + 1], "%d", offset);
+            sprintf(relcatArgs[j + 1], "%d", recordLength);
         } else if (strcmp(relcatArgs[j], RECSPERPG) == 0) {
             sprintf(relcatArgs[j + 1], "%d", recsPerPg);
         } else if (strcmp(relcatArgs[j], NUMATTRS) == 0) {
@@ -197,7 +284,10 @@ static int CreateUnlocked(int argc, char **argv) {
     freeAllottedMem(relcatArgs, relcatArraySize);
 
     //Creating the file for relation and adding a page
-    int fd = open(relName, O_RDWR | O_CREAT | O_TRUNC, S_IRWXU);
+    int fd = open(
+            relName,
+            O_RDWR | O_CREAT | O_TRUNC | MINIREL_BINARY_FLAG,
+            S_IRWXU);
     char *emptyPage = (char *) calloc(PAGESIZE, 1);
     write(fd, emptyPage, PAGESIZE);
 #ifdef _WIN32

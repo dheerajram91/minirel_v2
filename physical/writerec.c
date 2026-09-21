@@ -32,10 +32,13 @@
  */
 int WriteRec(const int relNum, const char *recPtr, const Rid *recId) {
     if (recPtr == NULL || recId == NULL) {
-        ErrorMsgs(NULL_ARGUMENT_RECEIVED, g_PrintFlag);
+        return ErrorMsgs(NULL_ARGUMENT_RECEIVED, g_PrintFlag);
     }
-    if (relNum < 0 || relNum > MAXOPEN) {
-        ErrorMsgs(RELNUM_OUT_OF_BOUND, g_PrintFlag);
+    if (relNum < 0 || relNum >= MAXOPEN) {
+        return ErrorMsgs(RELNUM_OUT_OF_BOUND, g_PrintFlag);
+    }
+    if (ValidateRecordForRelation(&g_CatCache[relNum], recPtr) != OK) {
+        return NOTOK;
     }
     /*  Write the contents  */
     ReadPage(relNum, recId->pid);

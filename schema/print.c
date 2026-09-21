@@ -55,7 +55,7 @@ int Print(int argc, char **argv) {
     /* Print the header row */
     printf("| ");
     while (list != NULL) {
-        int width = list->type == STRING ? list->length : MAX_NUM_LENGTH;
+        int width = list->type == STRING ? max(list->length, 4) : MAX_NUM_LENGTH;
         printf("%*s | ", max(strlen(list->attrName), width), list->attrName);
         tableRowLength += (3 + max(strlen(list->attrName), width));
         list = list->next;
@@ -71,7 +71,12 @@ int Print(int argc, char **argv) {
         list = attrList;
         printf("| ");
         while (list != NULL) {
-            int width = list->type == STRING ? list->length : MAX_NUM_LENGTH;
+            int width = list->type == STRING ? max(list->length, 4) : MAX_NUM_LENGTH;
+            if (RecordAttributeIsNull(&g_CatCache[relNum], recPtr, list) == TRUE) {
+                printf("%*s | ", max(strlen(list->attrName), width), "NULL");
+                list = list->next;
+                continue;
+            }
             switch (list->type) {
                 case INTEGER:
                     intval = readIntFromByteArray(recPtr, list->offset);

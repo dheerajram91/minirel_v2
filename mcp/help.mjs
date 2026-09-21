@@ -2,6 +2,10 @@ export const MINIREL_HELP = `# MINIREL command help
 
 Every command must end with a semicolon and be sent on its own line.
 
+Unless \`workingDirectory\` is supplied, databases are stored under the
+repository's ignored \`DB\` directory. Set \`MINIREL_DATA_DIR\` to override
+that default.
+
 ## Database lifecycle
 
 \`\`\`text
@@ -20,11 +24,15 @@ create courses (id = i primary key, title = s40 not null);
 create library (bookid = i primary key, title = s50, borrowerid = i);
 
 insert into students (id = 1, name = "Ada", email = "ada@school");
+insert into students (id = 2, name = "Grace", email = null);
+insert into students (id = 3, name = "Linus");
 insert into courses (id = 10, title = "Database Systems");
 insert into library (bookid = 100, title = "Database Internals", borrowerid = 1);
 
 print students;
 update students set name = "Ada Lovelace" where (id = 1);
+update students set email = null where (id = 1);
+select into missingemail from students where (email = null);
 update library set borrowerid = 2 where (bookid = 100 and borrowerid = 1);
 delete from library where (borrowerid = 1);
 destroy library;
@@ -33,6 +41,18 @@ destroy library;
 Types are \`i\` (integer), \`f\` (float), and \`sN\` (a string of 1-50 bytes).
 Columns may use \`unique\`, \`not null\`, or \`primary key\`. A primary key
 implies unique and not-null behavior.
+
+New relations store a compact NULL bitmap. Use the unquoted \`null\` literal,
+or omit a nullable column from an insert. \`print\` displays \`NULL\`.
+\`= null\` matches null values and \`<> null\` matches non-null values.
+Unique columns allow multiple nulls. Legacy relations created before NULL
+support remain readable but require every attribute until their data is
+projected into a newly created relation.
+
+Writes reject malformed or overflowing numbers, non-finite floats, overlong
+strings, duplicate or unknown attributes, required nulls, invalid binary-load
+records, duplicate tuples, and key violations instead of truncating or silently
+converting values.
 
 ## Relational operations
 
@@ -47,7 +67,9 @@ Comparison operators are \`=\`, \`>=\`, \`>\`, \`<=\`, \`<>\`, and \`<\`.
 \`update\` accepts multiple comma-separated assignments and its conditions may
 be joined with \`and\`. \`select\` and \`delete\` currently evaluate one
 condition.
-\`load\` consumes MINIREL's fixed-width binary record format, not CSV.
+\`load\` consumes MINIREL's fixed-width binary record format, not CSV. Its path
+is relative to the open database directory. New-format records include their
+trailing NULL bitmap.
 
 \`buildindex for students on id;\` and \`dropindex for students on id;\` are
 accepted by the parser but indexing is only a stub and does not create an index.

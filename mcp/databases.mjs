@@ -2,13 +2,17 @@ import { readdir, stat } from "node:fs/promises";
 import path from "node:path";
 
 import { validateIdentifier } from "./commands.mjs";
-import { runMinirelScript } from "./minirel-runner.mjs";
+import {
+  resolveWorkingDirectory,
+  runMinirelScript,
+} from "./minirel-runner.mjs";
 
 const SYSTEM_TABLES = new Set(["relcat", "attrcat"]);
 const ATTRIBUTE_TYPE_MASK = 0xff;
 const UNIQUE_ATTRIBUTE_FLAG = 0x100;
 const NOT_NULL_ATTRIBUTE_FLAG = 0x200;
 const PRIMARY_KEY_ATTRIBUTE_FLAG = 0x400;
+const NULL_BITMAP_STORAGE_FLAG = 0x800;
 
 async function isMinirelDatabase(root, entry) {
   if (!entry.isDirectory()) {
@@ -29,8 +33,8 @@ async function isMinirelDatabase(root, entry) {
   }
 }
 
-export async function listMinirelDatabases(workingDirectory = process.cwd()) {
-  const root = path.resolve(workingDirectory);
+export async function listMinirelDatabases(workingDirectory) {
+  const root = await resolveWorkingDirectory(workingDirectory);
   const entries = await readdir(root, { withFileTypes: true });
   const matches = await Promise.all(
     entries.map(async (entry) => ({
@@ -105,6 +109,7 @@ function parseTableRows(stdout) {
         unique: Boolean(encodedType & UNIQUE_ATTRIBUTE_FLAG),
         notNull: Boolean(encodedType & NOT_NULL_ATTRIBUTE_FLAG),
         primaryKey: Boolean(encodedType & PRIMARY_KEY_ATTRIBUTE_FLAG),
+        nullBitmapStorage: Boolean(encodedType & NULL_BITMAP_STORAGE_FLAG),
       });
     }
   }
@@ -114,11 +119,11 @@ function parseTableRows(stdout) {
 
 export async function inspectMinirelDatabase({
   database,
-  workingDirectory = process.cwd(),
+  workingDirectory,
   includeSystemTables = false,
 }) {
   validateIdentifier(database, "Database name");
-  const root = path.resolve(workingDirectory);
+  const root = await resolveWorkingDirectory(workingDirectory);
   const result = await runMinirelScript({
     workingDirectory: root,
     script: [
@@ -140,14 +145,31 @@ export async function inspectMinirelDatabase({
   const { relations, attributes } = parseTableRows(result.stdout);
   const tables = relations
     .filter((relation) => includeSystemTables || !SYSTEM_TABLES.has(relation.name))
-    .map((relation) => ({
-      ...relation,
-      systemTable: SYSTEM_TABLES.has(relation.name),
-      columns: attributes
+    .map((relation) => {
+      const relationAttributes = attributes
         .filter((attribute) => attribute.relation === relation.name)
-        .sort((left, right) => left.offset - right.offset)
-        .map(({ relation: _relation, ...attribute }) => attribute),
-    }))
+        .sort((left, right) => left.offset - right.offset);
+      const hasNullBitmap = relationAttributes.some(
+        (attribute) => attribute.nullBitmapStorage,
+      );
+      const nullBitmapBytes = hasNullBitmap
+        ? Math.ceil(relation.columnCount / 8)
+        : 0;
+
+      return {
+        ...relation,
+        systemTable: SYSTEM_TABLES.has(relation.name),
+        recordFormat: hasNullBitmap ? "null-bitmap-v1" : "legacy-fixed-v1",
+        dataLength: relation.recordLength - nullBitmapBytes,
+        nullBitmapBytes,
+        columns: relationAttributes.map(
+          ({ relation: _relation, nullBitmapStorage: _storage, ...attribute }) => ({
+            ...attribute,
+            nullable: !attribute.notNull,
+          }),
+        ),
+      };
+    })
     .sort((left, right) => left.name.localeCompare(right.name));
 
   return {
@@ -159,7 +181,7 @@ export async function inspectMinirelDatabase({
 }
 
 export async function discoverMinirelDatabases(
-  workingDirectory = process.cwd(),
+  workingDirectory,
 ) {
   const listed = await listMinirelDatabases(workingDirectory);
   const databases = await Promise.all(

@@ -16,6 +16,7 @@
 #include "openrel.h"
 #include "findrelnum.h"
 #include "create.h"
+#include "helpers.h"
 
 #include <stdio.h>
 #include <stdlib.h>

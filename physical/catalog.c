@@ -52,6 +52,10 @@ void DecodeAttributeType(
     *type = encodedType & ATTRIBUTE_TYPE_MASK;
 }
 
+bool AttributeTypeUsesNullBitmap(int encodedType) {
+    return (encodedType & NULL_BITMAP_STORAGE_FLAG) != 0;
+}
+
 void EncodeRelCatalogRecord(char *destination, const RelCatalogRecord *record) {
     memset(destination, 0, RELCAT_RECORD_SIZE);
     strncpy(destination + RELCAT_RELNAME_OFFSET, record->relName, RELNAME);
@@ -81,7 +85,10 @@ void EncodeAttrCatalogRecord(char *destination, const AttrCatalogRecord *record)
                     record->type,
                     record->unique,
                     record->notNull,
-                    record->primaryKey),
+                    record->primaryKey)
+                    | (record->nullBitmapStorage == TRUE
+                            ? NULL_BITMAP_STORAGE_FLAG
+                            : 0),
             destination + ATTRCAT_TYPE_OFFSET);
     strncpy(destination + ATTRCAT_ATTRNAME_OFFSET, record->attrName, RELNAME);
     strncpy(destination + ATTRCAT_RELNAME_OFFSET, record->relName, RELNAME);
@@ -94,6 +101,7 @@ void DecodeAttrCatalogRecord(const char *source, AttrCatalogRecord *record) {
     record->offset = readIntFromByteArray(source, ATTRCAT_OFFSET_OFFSET);
     record->length = readIntFromByteArray(source, ATTRCAT_LENGTH_OFFSET);
     encodedType = readIntFromByteArray(source, ATTRCAT_TYPE_OFFSET);
+    record->nullBitmapStorage = AttributeTypeUsesNullBitmap(encodedType);
     DecodeAttributeType(
             encodedType,
             &record->type,
@@ -131,6 +139,7 @@ struct attrCatalog* BuildAttributeCatalog(
         node->unique = schema[i].unique;
         node->notNull = schema[i].notNull;
         node->primaryKey = schema[i].primaryKey;
+        node->position = i;
         strncpy(node->attrName, schema[i].name, RELNAME);
         strncpy(node->relName, relationName, RELNAME);
 

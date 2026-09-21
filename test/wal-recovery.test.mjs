@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { appendFile, mkdtemp, readdir, rm, stat } from "node:fs/promises";
+import { appendFile, mkdtemp, readdir, rm, stat, truncate } from "node:fs/promises";
 import { spawn } from "node:child_process";
 import os from "node:os";
 import path from "node:path";
@@ -28,7 +28,11 @@ async function setupSchool(workingDirectory) {
 async function crashMinirel(workingDirectory, script, crashPoint) {
   const child = spawn(defaultBinaryPath(), [], {
     cwd: workingDirectory,
-    env: { ...process.env, MINIREL_CRASH_POINT: crashPoint },
+    env: {
+      ...process.env,
+      MINIREL_DATA_DIR: ".",
+      MINIREL_CRASH_POINT: crashPoint,
+    },
     stdio: ["pipe", "pipe", "pipe"],
   });
   let stdout = "";
@@ -116,6 +120,43 @@ test("recovery undoes a data page written before commit", async (context) => {
     const recovered = await readStudents(workingDirectory);
     assert.deepEqual(recovered.errors, []);
     assert.doesNotMatch(recovered.stdout.split("print students;").at(-1), /Loser/);
+    await assertRecoveryClean(workingDirectory);
+  } finally {
+    await rm(workingDirectory, { recursive: true, force: true });
+  }
+});
+
+test("recovery tolerates a stale backup record when no mutation was logged", async (context) => {
+  if (!(await getMinirelStatus()).available) {
+    context.skip("MINIREL executable has not been built.");
+    return;
+  }
+  const workingDirectory = await mkdtemp(path.join(os.tmpdir(), "minirel-wal-"));
+  try {
+    await setupSchool(workingDirectory);
+    await crashMinirel(
+      workingDirectory,
+      [
+        "opendb school;",
+        "begin;",
+        'insert into students (id = 2, name = "NeverWritten");',
+        "commit;",
+      ].join("\n"),
+      "after_wal_page",
+    );
+
+    const databasePath = path.join(workingDirectory, "school");
+    await truncate(path.join(databasePath, ".minirel.wal"), 237);
+    const files = await readdir(databasePath);
+    await Promise.all(
+      files
+        .filter((name) => name.startsWith(".minirel-tx-"))
+        .map((name) => rm(path.join(databasePath, name))),
+    );
+
+    const recovered = await readStudents(workingDirectory);
+    assert.deepEqual(recovered.errors, []);
+    assert.doesNotMatch(recovered.stdout, /NeverWritten/);
     await assertRecoveryClean(workingDirectory);
   } finally {
     await rm(workingDirectory, { recursive: true, force: true });

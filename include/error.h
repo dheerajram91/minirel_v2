@@ -54,6 +54,10 @@
 #define TRANSACTION_ABORTED         144     /* Commit converted to rollback after transaction failure */
 #define WAL_WRITE_ERROR             145     /* WAL append or force failed */
 #define WAL_RECOVERY_ERROR          146     /* WAL recovery failed */
+#define NOT_NULL_CONSTRAINT_VIOLATION 147   /* NULL supplied for a required attribute */
+#define NUMERIC_OUT_OF_RANGE        148     /* Numeric value is outside the stored type */
+#define LEGACY_NULL_UNSUPPORTED     149     /* Legacy relation cannot encode NULL */
+#define INVALID_NULL_BITMAP         150     /* Record has malformed NULL metadata */
 
 int ErrorMsgs(int errorId, int printFlag);
 

@@ -60,7 +60,7 @@ int CloseRel(int relNum) {
             return NOTOK;
         }
         if (FindRec(RELCAT_CACHE, &startRid, &foundRid, &recPtr, STRING, RELNAME, 0,
-                g_CatCache[relNum].relName, EQ) == NOTOK) {
+                g_CatCache[relNum].relName, EQ, FALSE) == NOTOK) {
             if (catalogLock != NOTOK) {
                 ReleaseManagedLock(catalogLock);
             }

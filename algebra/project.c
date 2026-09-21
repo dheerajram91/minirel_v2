@@ -57,9 +57,9 @@ int Project(int argc, char **argv) {
 
     int i, j, numCreateArgs = (argc - 3) * 2 + 2;
     char **createArgs = (char **) malloc(numCreateArgs * sizeof(char *));
-    createArgs[0] = (char *) malloc(strlen("create") * sizeof(char));
+    createArgs[0] = (char *) calloc(RELNAME, 1);
     strcpy(createArgs[0], "create");
-    createArgs[1] = (char *) malloc(strlen(destRel) * sizeof(char));
+    createArgs[1] = (char *) calloc(RELNAME, 1);
     strcpy(createArgs[1], destRel);
     struct attrCatalog *attr;
 
@@ -68,13 +68,13 @@ int Project(int argc, char **argv) {
     //Stores the array of attributes in dest relation in order they appear. To be used later
 
     for (i = 2, j = 3; i <= 2 * argc - 6; i += 2, ++j) {
-        createArgs[i] = (char *) malloc(strlen(argv[j]) * sizeof(char));
+        createArgs[i] = (char *) calloc(RELNAME, 1);
         attr = getAttrCatalog(g_CatCache[sourceRelNum].attrList, argv[j]);
         if (attr == NULL) {
             return ErrorMsgs(ATTRNOEXIST, g_PrintFlag);
         }
         strcpy(createArgs[i], attr->attrName);
-        createArgs[i + 1] = (char *) calloc(4, sizeof(char));
+        createArgs[i + 1] = (char *) calloc(RELNAME, 1);
         if (attr->type == STRING) {
             sprintf(createArgs[i + 1], "s%d", attr->length);
         } else {
@@ -97,17 +97,24 @@ int Project(int argc, char **argv) {
     int destRelNum = FindRelNum(destRel);
 
     while (GetNextRec(sourceRelNum, &startRid, &foundRid, &recPtr) == OK) {
-        //Iterate through each record in source rel
         char *destRec = (char *) calloc(g_CatCache[destRelNum].recLength, sizeof(char));
-        int offset = 0;
+        struct attrCatalog *destinationAttribute = g_CatCache[destRelNum].attrList;
         i = 0;
-        struct attrCatalog *attr = attrArray[i];
-        while (i < j - 3) { //Take each attribute in dest relation
-            memcpy(destRec + offset, recPtr + attr->offset, attr->length);
-            //Copy the bytes corresponding to the attribute into dest record
+        while (i < j - 3) {
+            if (CopyRecordAttribute(
+                    &g_CatCache[destRelNum],
+                    destRec,
+                    destinationAttribute,
+                    &g_CatCache[sourceRelNum],
+                    recPtr,
+                    attrArray[i]) != OK) {
+                free(destRec);
+                free(foundRid);
+                free(attrArray);
+                return NOTOK;
+            }
             i++;
-            offset += attr->length;
-            attr = attrArray[i];
+            destinationAttribute = destinationAttribute->next;
         }
         //Temporarily disable the error print flag so that duplicate won't cause error.
         int tempFlag = g_PrintFlag;
@@ -119,5 +126,6 @@ int Project(int argc, char **argv) {
         startRid = *foundRid;
         free(foundRid);
     }
+    free(attrArray);
     return OK;
 }

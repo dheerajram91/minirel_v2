@@ -52,7 +52,7 @@ int Load(int argc, char **argv) {
         return ErrorMsgs(REL_NOT_EMPTY, g_PrintFlag);
     }
 
-    int fd = open(argv[2], O_RDONLY);
+    int fd = open(argv[2], O_RDONLY | MINIREL_BINARY_FLAG);
     if (fd < 0) {
         return ErrorMsgs(INVALID_FILE, g_PrintFlag);
     }
@@ -60,16 +60,23 @@ int Load(int argc, char **argv) {
     int recLength = g_CatCache[relNum].recLength;
     char *newRec = (char *) calloc(recLength, sizeof(char));
 
-    g_CheckDuplicateTuples = NOTOK;
-    while (read(fd, newRec, recLength) == recLength) {
+    while (TRUE) {
+        int bytesRead = read(fd, newRec, recLength);
+        if (bytesRead == 0) {
+            break;
+        }
+        if (bytesRead < 0 || bytesRead != recLength) {
+            close(fd);
+            free(newRec);
+            return ErrorMsgs(INVALID_FILE, g_PrintFlag);
+        }
         if (InsertRec(relNum, newRec) != OK) {
-            g_CheckDuplicateTuples = OK;
             close(fd);
             free(newRec);
             return NOTOK;
         }
+        memset(newRec, 0, recLength);
     }
-    g_CheckDuplicateTuples = OK;
     close(fd);
     free(newRec);
 

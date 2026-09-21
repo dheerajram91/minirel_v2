@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "build:minirel": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-minirel.ps1",
+    "minirel": "node mcp/cli.mjs",
     "mcp": "node mcp/server.mjs",
     "test": "node --test"
   },

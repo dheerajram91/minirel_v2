@@ -73,8 +73,9 @@ PARSER_TABLE table [24] [24] = {
 	{	0,	LEOP,		EAT3,		14	},
 	{	0,	NOTEQOP,	EAT3,		14	},
 	{	0,	LTOP,		EAT3,		0	},
-	{	1,	NUMBER,		EAT1,		16	},
-	{	0,	QUOTEDSTR,	EAT1,		0	},
+	{	1,	NUMBER,		EAT1,		17	},
+	{	0,	QUOTEDSTR,	EAT1,		17	},
+	{	0,	NULLTOKEN,	EAT1,		17	},
 	{	1, 	AND,		THROW,		8	},
 	{	0,	RPARAN,		THROW,		0	},
 	{	1,	SEMI,		DONE,		0	}	},
@@ -107,8 +108,9 @@ PARSER_TABLE table [24] [24] = {
 	{	1,	LPARAN,		THROW,		0	},
 	{	1,	STR,		EAT1,		0	},
 	{	1,	EQOP,		THROW,		0	},
-	{	1,	NUMBER,		EAT1,		8	},
-	{	0,	QUOTEDSTR,	EAT1,		0	},
+	{	1,	NUMBER,		EAT1,		9	},
+	{	0,	QUOTEDSTR,	EAT1,		9	},
+	{	0,	NULLTOKEN,	EAT1,		9	},
 	{	1,	COMMA,		THROW,		4	},
 	{	0,	RPARAN,		THROW,		0	},
 	{	1,	SEMI,		DONE,		0	}	},
@@ -124,8 +126,9 @@ PARSER_TABLE table [24] [24] = {
 	{	0,	LEOP,		EAT3,		12	},
 	{	0,	NOTEQOP,	EAT3,		12	},
 	{	0,	LTOP,		EAT3,		0	},
-	{	1,	NUMBER,		EAT1,		14	},
-	{	0,	QUOTEDSTR,	EAT1,		0	},
+	{	1,	NUMBER,		EAT1,		15	},
+	{	0,	QUOTEDSTR,	EAT1,		15	},
+	{	0,	NULLTOKEN,	EAT1,		15	},
 	{	1, 	AND,		THROW,		5	},
 	{	0,	RPARAN,		THROW,		0	},
 	{	1,	SEMI,		DONE,		0	}	},
@@ -176,21 +179,23 @@ PARSER_TABLE table [24] [24] = {
 	{	1,	SET,		THROW,		0	},
 	{	1,	STR,		EAT1,		0	},
 	{	1,	EQOP,		THROW,		0	},
-	{	1,	NUMBER,		EAT1,		7	},
-	{	0,	QUOTEDSTR,	EAT1,		0	},
+	{	1,	NUMBER,		EAT1,		8	},
+	{	0,	QUOTEDSTR,	EAT1,		8	},
+	{	0,	NULLTOKEN,	EAT1,		8	},
 	{	1,	COMMA,		THROW,		3	},
 	{	0,	WHERE,		EAT1,		0	},
 	{	1,	LPARAN,		THROW,		0	},
 	{	1,	STR,		EAT1,		0	},
-	{	1,	EQOP,		EAT3,		17	},
-	{	0,	GEOP,		EAT3,		17	},
-	{	0,	GTOP,		EAT3,		17	},
-	{	0,	LEOP,		EAT3,		17	},
-	{	0,	NOTEQOP,	EAT3,		17	},
+	{	1,	EQOP,		EAT3,		18	},
+	{	0,	GEOP,		EAT3,		18	},
+	{	0,	GTOP,		EAT3,		18	},
+	{	0,	LEOP,		EAT3,		18	},
+	{	0,	NOTEQOP,	EAT3,		18	},
 	{	0,	LTOP,		EAT3,		0	},
-	{	1,	NUMBER,		EAT1,		19	},
-	{	0,	QUOTEDSTR,	EAT1,		0	},
-	{	1,	AND,		THROW,		10	},
+	{	1,	NUMBER,		EAT1,		21	},
+	{	0,	QUOTEDSTR,	EAT1,		21	},
+	{	0,	NULLTOKEN,	EAT1,		21	},
+	{	1,	AND,		THROW,		11	},
 	{	0,	RPARAN,		THROW,		0	},
 	{	1,	SEMI,		DONE,		0	}	},
 };
@@ -300,7 +305,10 @@ int tcode;
 			    loop = 0;
 			    break;
 			case EAT1 :
-			    strcpy (ptr[pcount], tokenbuff);
+			    if (tcode == NULLTOKEN)
+			        strcpy (ptr[pcount], NULL_VALUE_MARKER);
+			    else
+			        strcpy (ptr[pcount], tokenbuff);
 			    pcount += ONE;
 			    break;
 			case EAT3 :

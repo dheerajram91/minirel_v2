@@ -24,8 +24,19 @@ npm run build:minirel
 Get-Content query\smoke.query | .\run\minirel.exe
 ```
 
-Run `.\run\minirel.exe` without redirected input for the interactive
-`query >` prompt. Every command must end with a semicolon.
+Run `npm run minirel` for the interactive `query >` prompt. By default, the CLI
+and MCP server store every database under the repository's ignored `DB`
+directory. Set `MINIREL_DATA_DIR` to choose a different default, or pass an MCP
+`workingDirectory` override. Passing the repository root as `workingDirectory`
+also resolves to its `DB` directory, preventing agents from accidentally
+creating databases beside source files. Running `.\run\minirel.exe` directly
+remains a low-level option and uses a `DB` subdirectory under the current
+directory. Every command must end with a semicolon.
+
+Each database is a runtime directory. As an extra safeguard, newly created
+databases include a local `.gitignore`. The root
+`.gitignore` excludes the complete `DB` tree, including catalogs, tables, locks,
+backups, and WAL files.
 
 Fields support optional `unique`, `not null`, and `primary key` characteristics
 after the type:
@@ -43,10 +54,27 @@ database is closed and reopened. A relation can have one primary key, and a
 primary key implies both `unique` and `not null`. Multiple fields can be marked
 `unique`; each one is enforced independently.
 
-MINIREL currently requires every attribute to be present in an insert and does
-not have a `NULL` value representation. As a result, `not null` records schema
-intent and matches the existing insertion behavior. Nullable values and
-defaults require a future record-format extension.
+New relations have a real `NULL` representation. Use the unquoted `null`
+literal explicitly, or omit a nullable attribute:
+
+```text
+insert into students (id = 1, name = "Ada");
+insert into students (id = 2, name = "Grace", email = null);
+update students set email = null where (id = 1);
+select into missingemail from students where (email = null);
+```
+
+`print` displays null values as `NULL`. Equality with `null` selects null
+values, while `<> null` selects non-null values. `UNIQUE` permits multiple
+nulls, as in SQL, but primary keys and `not null` columns reject explicit or
+omitted nulls.
+
+The first nullable record format appends a compact bitmap to each physical
+record. Its presence is versioned through a flag in each relation's attribute
+catalog records. Databases and relations created by the original MINIREL remain
+readable without rewriting their bytes; legacy relations continue to require
+every attribute because their records have no null bitmap. Projecting legacy
+data into a newly created relation upgrades it to the nullable format.
 
 Catalog metadata
 ----------------
@@ -68,6 +96,32 @@ The on-disk bytes remain compatible with databases created by the original
 implementation. New attribute characteristics should be represented in the
 catalog types and serialization helpers rather than scattering numeric offsets
 through the database code.
+
+All relation, catalog, transaction-backup, load, and WAL descriptors are opened
+in binary mode on Windows. This is required because text-mode translation of a
+stored `0x0A` byte would otherwise shift fixed-width records.
+
+Strict writes
+-------------
+
+All record-writing paths now use shared validation:
+
+- Integers and floats must consume the complete supplied value.
+- Integer overflow, float overflow/underflow, and non-finite floats are rejected.
+- Strings longer than the column's declared length are rejected rather than
+  truncated.
+- Duplicate and unknown insert attributes are rejected.
+- Missing attributes become `NULL` only when the relation has the nullable
+  record format and the column is nullable.
+- `NOT NULL`, `PRIMARY KEY`, `UNIQUE`, and duplicate-tuple checks run before
+  physical insertion or update.
+- Updates validate the complete final table state before writing any row.
+- Binary `load` rejects partial records, malformed null bitmaps, non-canonical
+  null bytes, non-finite floats, duplicate tuples, and constraint violations.
+
+`load` paths are resolved from the open database directory and consume the
+relation's exact physical format, including the trailing null bitmap for new
+relations. A failed load inside an explicit transaction is rolled back in full.
 
 Concurrency control
 -------------------
@@ -167,8 +221,10 @@ database session exists, the opener:
    checkpoint.
 
 Recovery is idempotent: if MINIREL crashes during recovery, the next opener can
-repeat it. Deterministic tests terminate MINIREL after WAL force, after a data
-page write, after durable commit, and during recovery.
+repeat it. A missing stale backup is ignored only when the WAL proves that the
+resource had no page or drop mutation to undo; otherwise recovery fails rather
+than guessing. Deterministic tests terminate MINIREL after WAL force, after a
+data page write, after durable commit, and during recovery.
 
 Current WAL scope and limitations:
 
@@ -203,6 +259,8 @@ Comparison operators are `=`, `>=`, `>`, `<=`, `<>`, and `<`. The command:
   duplication, `UNIQUE`, and `PRIMARY KEY`.
 - Computes and validates the complete final table state before writing, so a
   multi-row constraint failure cannot leave a partially updated command.
+- Accepts `null` assignments for nullable columns and null predicates using
+  `= null` or `<> null`.
 - Participates in explicit `commit` and `rollback` transactions.
 
 No additional MCP tool is needed. Use `update` inside `run_minirel_commands` or,
@@ -220,7 +278,8 @@ per MINIREL command:
 - `discover_databases` to find databases and summarize their user tables and
   record counts.
 - `discover_tables` to return table schemas, column types and constraints,
-  record/page counts, and storage details for one database.
+  nullability, record format, data/bitmap lengths, record/page counts, and
+  storage details for one database.
 - `execute_transaction` to wrap a set of commands with `opendb`, `begin`,
   `commit`, and `closedb`.
 

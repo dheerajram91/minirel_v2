@@ -3,12 +3,14 @@
 typedef struct updateAssignment {
     struct attrCatalog *attribute;
     char *value;
+    bool isNull;
 } UpdateAssignment;
 
 typedef struct updateCondition {
     struct attrCatalog *attribute;
     int comparison;
     char *value;
+    bool isNull;
 } UpdateCondition;
 
 typedef struct updateRow {
@@ -18,43 +20,22 @@ typedef struct updateRow {
     bool matches;
 } UpdateRow;
 
-static int encodeValue(
-        const struct attrCatalog *attribute,
-        const char *text,
-        char *destination) {
-    char *end;
-
-    memset(destination, 0, attribute->length);
-    switch (attribute->type) {
-        case INTEGER: {
-            long value = strtol(text, &end, 10);
-            if (*text == '\0' || *end != '\0') {
-                return ErrorMsgs(INTEGER_EXPECTED, g_PrintFlag);
-            }
-            convertIntToByteArray((int) value, destination);
-            return OK;
-        }
-        case FLOAT: {
-            float value = strtof(text, &end);
-            if (*text == '\0' || *end != '\0') {
-                return ErrorMsgs(FLOAT_EXPECTED, g_PrintFlag);
-            }
-            convertFloatToByteArray(value, destination);
-            return OK;
-        }
-        case STRING:
-            if (strlen(text) > attribute->length) {
-                return ErrorMsgs(MAX_STRING_EXCEEDED, g_PrintFlag);
-            }
-            memcpy(destination, text, strlen(text));
-            return OK;
-        default:
-            return ErrorMsgs(INVALID_ATTR_TYPE, g_PrintFlag);
-    }
-}
-
-static bool matchesCondition(const char *record, const UpdateCondition *condition) {
+static bool matchesCondition(
+        const CacheEntry *relation,
+        const char *record,
+        const UpdateCondition *condition) {
     const struct attrCatalog *attribute = condition->attribute;
+    bool recordIsNull = RecordAttributeIsNull(relation, record, attribute);
+
+    if (condition->isNull == TRUE) {
+        if (condition->comparison == EQ)
+            return recordIsNull;
+        if (condition->comparison == NEQ)
+            return recordIsNull == TRUE ? FALSE : TRUE;
+        return FALSE;
+    }
+    if (recordIsNull == TRUE)
+        return FALSE;
 
     switch (attribute->type) {
         case INTEGER:
@@ -185,9 +166,22 @@ int Update(int argc, char **argv) {
         offsetMap[attribute->offset] = 1;
         assignments[i].attribute = attribute;
         assignments[i].value = (char *) calloc(attribute->length, 1);
-        if (encodeValue(
-                attribute, argv[3 + i * 2], assignments[i].value) != OK) {
+        if (EncodeTextValue(
+                attribute,
+                argv[3 + i * 2],
+                assignments[i].value,
+                &assignments[i].isNull) != OK) {
             goto cleanup;
+        }
+        if (assignments[i].isNull == TRUE) {
+            if (g_CatCache[relNum].hasNullBitmap == FALSE) {
+                ErrorMsgs(LEGACY_NULL_UNSUPPORTED, g_PrintFlag);
+                goto cleanup;
+            }
+            if (attribute->notNull == TRUE) {
+                ErrorMsgs(NOT_NULL_CONSTRAINT_VIOLATION, g_PrintFlag);
+                goto cleanup;
+            }
         }
     }
 
@@ -202,7 +196,17 @@ int Update(int argc, char **argv) {
         conditions[i].attribute = attribute;
         conditions[i].comparison = readIntFromByteArray(argv[base + 1], 0);
         conditions[i].value = (char *) calloc(attribute->length, 1);
-        if (encodeValue(attribute, argv[base + 2], conditions[i].value) != OK) {
+        if (EncodeTextValue(
+                attribute,
+                argv[base + 2],
+                conditions[i].value,
+                &conditions[i].isNull) != OK) {
+            goto cleanup;
+        }
+        if (conditions[i].isNull == TRUE
+                && conditions[i].comparison != EQ
+                && conditions[i].comparison != NEQ) {
+            ErrorMsgs(INVALID_COMP_OP, g_PrintFlag);
             goto cleanup;
         }
     }
@@ -217,7 +221,10 @@ int Update(int argc, char **argv) {
         memcpy(row->updated, record, recordLength);
 
         for (i = 0; i < conditionCount; i++) {
-            if (matchesCondition(row->original, &conditions[i]) == FALSE) {
+            if (matchesCondition(
+                    &g_CatCache[relNum],
+                    row->original,
+                    &conditions[i]) == FALSE) {
                 matches = FALSE;
                 break;
             }
@@ -225,10 +232,21 @@ int Update(int argc, char **argv) {
         row->matches = matches;
         if (matches == TRUE) {
             for (i = 0; i < assignmentCount; i++) {
-                memcpy(
-                        row->updated + assignments[i].attribute->offset,
-                        assignments[i].value,
-                        assignments[i].attribute->length);
+                if (assignments[i].isNull == TRUE) {
+                    RecordSetAttributeNull(
+                            &g_CatCache[relNum],
+                            row->updated,
+                            assignments[i].attribute);
+                } else {
+                    RecordClearAttributeNull(
+                            &g_CatCache[relNum],
+                            row->updated,
+                            assignments[i].attribute);
+                    memcpy(
+                            row->updated + assignments[i].attribute->offset,
+                            assignments[i].value,
+                            assignments[i].attribute->length);
+                }
             }
             updateCount++;
         }
@@ -241,6 +259,9 @@ int Update(int argc, char **argv) {
 
     for (i = 0; i < rowCount; i++) {
         const char *left = finalRecord(&rows[i]);
+        if (ValidateRecordForRelation(&g_CatCache[relNum], left) != OK) {
+            goto cleanup;
+        }
         for (j = i + 1; j < rowCount; j++) {
             const char *right = finalRecord(&rows[j]);
             struct attrCatalog *attribute;
@@ -249,6 +270,10 @@ int Update(int argc, char **argv) {
                     attribute != NULL;
                     attribute = attribute->next) {
                 if (attribute->unique == TRUE
+                        && RecordAttributeIsNull(
+                                &g_CatCache[relNum], left, attribute) == FALSE
+                        && RecordAttributeIsNull(
+                                &g_CatCache[relNum], right, attribute) == FALSE
                         && memcmp(
                                 left + attribute->offset,
                                 right + attribute->offset,

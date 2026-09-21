@@ -18,6 +18,7 @@
 #include "../include/readpage.h"
 
 int FindRec(int relNum, Rid *startRid, Rid **foundRid, char **recPtr, const char attrType,
-        const int attrSize, const int attrOffset, const char *valuePtr, const int compOp);
+        const int attrSize, const int attrOffset, const char *valuePtr, const int compOp,
+        const bool valueIsNull);
 
 #endif /* FINDREC_H_ */

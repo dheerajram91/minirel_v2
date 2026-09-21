@@ -103,6 +103,10 @@
 #define PRIMARY		314
 #define SET		315
 
+#ifndef NULL_VALUE_MARKER
+#define NULL_VALUE_MARKER "\x1dMINIREL_NULL"
+#endif
+
 #define	ONE		1		/* action codes */
 #define	DONE		0
 #define	EAT1		-1

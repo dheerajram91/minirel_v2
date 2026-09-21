@@ -25,6 +25,7 @@
 #define UNIQUE_ATTRIBUTE_FLAG 0x100
 #define NOT_NULL_ATTRIBUTE_FLAG 0x200
 #define PRIMARY_KEY_ATTRIBUTE_FLAG 0x400
+#define NULL_BITMAP_STORAGE_FLAG 0x800
 #define ATTRIBUTE_TYPE_MASK 0xFF
 
 #define RELCAT_ATTRIBUTE_COUNT 6
@@ -57,6 +58,7 @@ typedef struct attrCatalogRecord {
     bool unique;
     bool notNull;
     bool primaryKey;
+    bool nullBitmapStorage;
     char attrName[RELNAME];
     char relName[RELNAME];
 } AttrCatalogRecord;
@@ -71,6 +73,7 @@ void DecodeAttributeType(
         bool *unique,
         bool *notNull,
         bool *primaryKey);
+bool AttributeTypeUsesNullBitmap(int encodedType);
 
 void EncodeRelCatalogRecord(char *destination, const RelCatalogRecord *record);
 void DecodeRelCatalogRecord(const char *source, RelCatalogRecord *record);

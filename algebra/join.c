@@ -54,7 +54,7 @@ int Join(int argc, char **argv) {
         return ErrorMsgs(DB_NOT_OPEN, g_PrintFlag);
     }
     int relNum1, relNum2, count, attrFoundFlag = 0, i, retVal, recResultLength;
-    int numAttrsRel1, numAttrsRel2, numAttrsTotal;
+    int numAttrsRel1, numAttrsRel2, numAttrsTotal, createArgCount;
     int offset1, offset2, attrSize1, attrSize2, newRelNum;
     datatype type1, type2;
     struct attrCatalog *head;
@@ -69,17 +69,13 @@ int Join(int argc, char **argv) {
 
     numAttrsRel1 = g_CatCache[relNum1].numAttrs;
     numAttrsRel2 = g_CatCache[relNum2].numAttrs;
-    numAttrsTotal = numAttrsRel1 + numAttrsRel2;
+    numAttrsTotal = numAttrsRel1 + numAttrsRel2 - 1;
+    createArgCount = (numAttrsTotal + 1) * 2;
 
     /* Preparing Argument list which should be passed to Create() */
-    argumentList = malloc(sizeof(char*) * (numAttrsTotal * 2));
-    argumentList[0] = malloc(sizeof(char) * RELNAME);
-    argumentList[1] = malloc(sizeof(char) * RELNAME);
-
-    for (count = 2; count < numAttrsTotal * 2; count++) {
-        argumentList[count] = malloc(sizeof(char) * RELNAME);
-        argumentList[count + 1] = malloc(sizeof(char) * 4);
-    }
+    argumentList = (char **) calloc(createArgCount, sizeof(char *));
+    for (count = 0; count < createArgCount; count++)
+        argumentList[count] = (char *) calloc(RELNAME, 1);
 
     strcpy(argumentList[0], "create");
     strcpy(argumentList[1], argv[1]);
@@ -130,7 +126,7 @@ int Join(int argc, char **argv) {
         }
         strcpy(argumentList[count], head->attrName);
         /* This is to give different name for same attribute names in two Relations */
-        for (i = 2; i < numAttrsRel1 + 2; i = i + 2)
+        for (i = 2; i < 2 + numAttrsRel1 * 2; i = i + 2)
             if (strcmp(argumentList[i], head->attrName) == 0) {
                 strcat(argumentList[count], "_2");
             }
@@ -152,35 +148,75 @@ int Join(int argc, char **argv) {
     if (attrFoundFlag == 0)
         return ErrorMsgs(ATTRNOEXIST, g_PrintFlag);
 
-    retVal = Create(numAttrsTotal * 2, argumentList);
+    if (type1 != type2)
+        return ErrorMsgs(TYPE_MISMATCH, g_PrintFlag);
+
+    retVal = Create(createArgCount, argumentList);
     if (retVal == NOTOK)
         return NOTOK;
 
     OpenRelWithLock(argv[1], LOCK_EXCLUSIVE);
     newRelNum = FindRelNum(argv[1]);
 
-    for (i = 0; i < numAttrsTotal * 2; i++)
+    for (i = 0; i < createArgCount; i++)
         free(argumentList[i]);
     free(argumentList);
 
-    if (type1 != type2)
-        return ErrorMsgs(TYPE_MISMATCH, g_PrintFlag);
-
-    recResultLength = g_CatCache[relNum1].recLength + g_CatCache[relNum2].recLength - attrSize2;
+    recResultLength = g_CatCache[newRelNum].recLength;
     recResult = malloc(sizeof(char) * (recResultLength));
 
     while (GetNextRec(relNum1, &startRidRel1, &foundRidRel1, &recPtr1) == OK) {
+        struct attrCatalog *joinAttribute1 = getAttrCatalog(
+                g_CatCache[relNum1].attrList, argv[3]);
+        if (RecordAttributeIsNull(
+                &g_CatCache[relNum1], recPtr1, joinAttribute1) == TRUE) {
+            startRidRel1 = *foundRidRel1;
+            free(foundRidRel1);
+            continue;
+        }
         startRidRel2.pid = 1;
         startRidRel2.slotnum = 0;
 
         while (FindRec(relNum2, &startRidRel2, &foundRidRel2, &recPtr2, type2, attrSize2, offset2,
-                recPtr1 + offset1, EQ) == OK) {
+                recPtr1 + offset1, EQ, FALSE) == OK) {
+            struct attrCatalog *destinationAttribute = g_CatCache[newRelNum].attrList;
+            struct attrCatalog *sourceAttribute = g_CatCache[relNum1].attrList;
+            memset(recResult, 0, recResultLength);
 
-            copyBinaryArray(recResult, recPtr1, g_CatCache[relNum1].recLength);
-            copyBinaryArray(recResult + g_CatCache[relNum1].recLength, recPtr2, offset2);
-            copyBinaryArray(recResult + g_CatCache[relNum1].recLength + offset2,
-                    recPtr2 + offset2 + attrSize2,
-                    g_CatCache[relNum2].recLength - offset2 - attrSize2);
+            while (sourceAttribute != NULL) {
+                if (CopyRecordAttribute(
+                        &g_CatCache[newRelNum],
+                        recResult,
+                        destinationAttribute,
+                        &g_CatCache[relNum1],
+                        recPtr1,
+                        sourceAttribute) != OK) {
+                    free(foundRidRel2);
+                    free(recResult);
+                    return NOTOK;
+                }
+                sourceAttribute = sourceAttribute->next;
+                destinationAttribute = destinationAttribute->next;
+            }
+
+            sourceAttribute = g_CatCache[relNum2].attrList;
+            while (sourceAttribute != NULL) {
+                if (strcmp(sourceAttribute->attrName, argv[5]) != 0) {
+                    if (CopyRecordAttribute(
+                            &g_CatCache[newRelNum],
+                            recResult,
+                            destinationAttribute,
+                            &g_CatCache[relNum2],
+                            recPtr2,
+                            sourceAttribute) != OK) {
+                        free(foundRidRel2);
+                        free(recResult);
+                        return NOTOK;
+                    }
+                    destinationAttribute = destinationAttribute->next;
+                }
+                sourceAttribute = sourceAttribute->next;
+            }
 
             InsertRec(newRelNum, recResult);
 
@@ -191,6 +227,7 @@ int Join(int argc, char **argv) {
         free(foundRidRel1);
     }
 
+    free(recResult);
     return OK;
 }
 

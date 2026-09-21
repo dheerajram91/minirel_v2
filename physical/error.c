@@ -103,7 +103,8 @@ if all attributes are named correctly.\n");
                 printf("Float value was expected but got string instead.\n");
                 break;
             case MAX_STRING_EXCEEDED:
-                printf("Exceeded the maximum allowed string size of %d\n",MAX_STRING_SIZE);
+                printf("String value exceeds its declared attribute length or the maximum size of %d.\n",
+                        MAX_STRING_SIZE);
                 break;
             case PID_OUT_OF_BOUND:
                 printf("Trying to read a page which is greater than the number of \
@@ -163,6 +164,18 @@ duplicate entry.\n");
                 break;
             case WAL_RECOVERY_ERROR:
                 printf("Write-ahead log recovery failed; the database was not opened.\n");
+                break;
+            case NOT_NULL_CONSTRAINT_VIOLATION:
+                printf("NOT NULL constraint violated! A required attribute cannot be NULL.\n");
+                break;
+            case NUMERIC_OUT_OF_RANGE:
+                printf("Numeric value is outside the range supported by its attribute type.\n");
+                break;
+            case LEGACY_NULL_UNSUPPORTED:
+                printf("This legacy relation cannot store NULL values; recreate or project it into a new relation first.\n");
+                break;
+            case INVALID_NULL_BITMAP:
+                printf("Record contains invalid NULL metadata or non-canonical NULL bytes.\n");
                 break;
             default:
                 printf("Congratulations! You just won 500 million GBP! Please send your \

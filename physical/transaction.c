@@ -44,13 +44,13 @@ static TransactionLock g_TransactionLocks[MAX_TRANSACTION_LOCKS];
 static TransactionBackup g_TransactionBackups[MAX_TRANSACTION_BACKUPS];
 
 static int copyFile(const char *source, const char *destination) {
-    int sourceFd = open(source, O_RDONLY);
+    int sourceFd = open(source, O_RDONLY | MINIREL_BINARY_FLAG);
     if (sourceFd < 0) {
         return NOTOK;
     }
     int destinationFd = open(
             destination,
-            O_WRONLY | O_CREAT | O_TRUNC,
+            O_WRONLY | O_CREAT | O_TRUNC | MINIREL_BINARY_FLAG,
             S_IRUSR | S_IWUSR);
     if (destinationFd < 0) {
         close(sourceFd);
@@ -158,7 +158,7 @@ static int prepareBackup(const char *resource) {
             (int) getpid(),
             resource);
 
-    int sourceFd = open(resource, O_RDONLY);
+    int sourceFd = open(resource, O_RDONLY | MINIREL_BINARY_FLAG);
     if (sourceFd < 0) {
         if (errno != ENOENT) {
             backup->inUse = FALSE;

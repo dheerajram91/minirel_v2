@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { access } from "node:fs/promises";
+import { access, mkdir } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -11,12 +11,37 @@ export function defaultBinaryPath() {
     : path.join(repoRoot, "run", process.platform === "win32" ? "minirel.exe" : "minirel");
 }
 
+export function defaultDataDirectory() {
+  if (process.env.MINIREL_DATA_DIR) {
+    return path.resolve(process.env.MINIREL_DATA_DIR);
+  }
+  return path.join(repoRoot, "DB");
+}
+
+export async function resolveWorkingDirectory(workingDirectory) {
+  const requested = workingDirectory ? path.resolve(workingDirectory) : undefined;
+  const resolved =
+    !requested || requested === repoRoot ? defaultDataDirectory() : requested;
+  if (!requested || requested === repoRoot) {
+    await mkdir(resolved, { recursive: true });
+  }
+  return resolved;
+}
+
 export async function getMinirelStatus(binaryPath = defaultBinaryPath()) {
   try {
     await access(binaryPath);
-    return { available: true, binaryPath };
+    return {
+      available: true,
+      binaryPath,
+      defaultDataDirectory: defaultDataDirectory(),
+    };
   } catch {
-    return { available: false, binaryPath };
+    return {
+      available: false,
+      binaryPath,
+      defaultDataDirectory: defaultDataDirectory(),
+    };
   }
 }
 
@@ -33,7 +58,7 @@ export function normalizeScript(script) {
 
 export async function runMinirelScript({
   script,
-  workingDirectory = repoRoot,
+  workingDirectory,
   timeoutMs = 30_000,
   binaryPath = defaultBinaryPath(),
 }) {
@@ -44,12 +69,13 @@ export async function runMinirelScript({
     );
   }
 
-  const cwd = path.resolve(workingDirectory);
+  const cwd = await resolveWorkingDirectory(workingDirectory);
   const input = normalizeScript(script);
 
   return await new Promise((resolve, reject) => {
     const child = spawn(binaryPath, [], {
       cwd,
+      env: { ...process.env, MINIREL_DATA_DIR: "." },
       shell: false,
       windowsHide: true,
       stdio: ["pipe", "pipe", "pipe"],

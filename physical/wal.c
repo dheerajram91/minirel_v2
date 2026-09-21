@@ -405,6 +405,23 @@ static bool transactionHasType(
     return FALSE;
 }
 
+static bool transactionMutatedResource(
+        WalRecord *records,
+        int recordCount,
+        unsigned long long transactionId,
+        const char *relation) {
+    int i;
+    for (i = 0; i < recordCount; i++) {
+        if (records[i].transactionId == transactionId
+                && (records[i].type == WAL_PAGE
+                        || records[i].type == WAL_DROP)
+                && strcmp(records[i].relation, relation) == 0) {
+            return TRUE;
+        }
+    }
+    return FALSE;
+}
+
 static int writePageImage(const WalRecord *record, const unsigned char *image) {
     int fd = open(
             record->relation,
@@ -544,7 +561,21 @@ static int recoverWal() {
             const char *backupPath = (const char *) record->payload + 1;
             if (committed == FALSE && aborted == FALSE) {
                 if (record->payload[0] != 0) {
-                    result = copyFile(backupPath, record->relation);
+                    struct stat backupInfo;
+                    struct stat resourceInfo;
+                    if (stat(backupPath, &backupInfo) == 0) {
+                        result = copyFile(backupPath, record->relation);
+                    } else if (errno == ENOENT
+                            && transactionMutatedResource(
+                                    records,
+                                    recordCount,
+                                    record->transactionId,
+                                    record->relation) == FALSE
+                            && stat(record->relation, &resourceInfo) == 0) {
+                        result = OK;
+                    } else {
+                        result = NOTOK;
+                    }
                 } else {
                     remove(record->relation);
                 }

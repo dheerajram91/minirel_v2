@@ -38,9 +38,18 @@
  *      Uses: OpenRel()
  */
 int Insert(int argc, char **argv) {
+    int i;
+    int result;
+    int relNum;
+    char *recPtr;
+    unsigned char *provided;
+    struct attrCatalog *attr;
 
     if (g_DBOpenFlag != OK) {
         return ErrorMsgs(DB_NOT_OPEN, g_PrintFlag);
+    }
+    if (argc < 4 || argc % 2 != 0) {
+        return ErrorMsgs(NO_ATTRIBUTES_TO_INSERT, g_PrintFlag);
     }
 
     if ((strcmp(argv[0], "_insert") != 0)
@@ -48,58 +57,74 @@ int Insert(int argc, char **argv) {
         return ErrorMsgs(METADATA_SECURITY, g_PrintFlag);
     }
 
-    char relName[RELNAME], attrName[RELNAME];
+    char relName[RELNAME];
     strcpy(relName, argv[1]);
 
-    int relNum = OpenRelWithLock(relName, LOCK_EXCLUSIVE);
+    relNum = OpenRelWithLock(relName, LOCK_EXCLUSIVE);
     if (relNum == NOTOK) {
         return NOTOK;
     }
 
-    if (g_CatCache[relNum].numAttrs != (argc - 2) / 2) {
-        return ErrorMsgs(INSUFFICIENT_ATTRS, g_PrintFlag);
+    recPtr = (char *) calloc(g_CatCache[relNum].recLength, sizeof(char));
+    provided = (unsigned char *) calloc(g_CatCache[relNum].numAttrs, 1);
+    if (recPtr == NULL || provided == NULL) {
+        free(recPtr);
+        free(provided);
+        return ErrorMsgs(FILE_SYSTEM_ERROR, g_PrintFlag);
     }
-
-    int i;
-    /* Using calloc so that memory is initialized to zero.
-     This is required while checking for duplicates in the relation */
-    char *recPtr = (char *) calloc(g_CatCache[relNum].recLength, sizeof(char));
-    struct attrCatalog *attr = NULL;
-
-    //The offset of a record can be used to uniquely identify it
-    int offsetMap[MAXRECORD] = { 0 };
 
     for (i = 2; i < argc; i += 2) {
+        bool isNull;
         attr = getAttrCatalog(g_CatCache[relNum].attrList, argv[i]);
         if (attr == NULL) {
-            return ErrorMsgs(ATTR_NOT_IN_REL, g_PrintFlag);
+            result = ErrorMsgs(ATTR_NOT_IN_REL, g_PrintFlag);
+            goto cleanup;
         }
-        if (offsetMap[attr->offset] == 1) {
-            return ErrorMsgs(ATTR_REPEATED, g_PrintFlag);
-        } else {
-            offsetMap[attr->offset] = 1;
+        if (provided[attr->position] != 0) {
+            result = ErrorMsgs(ATTR_REPEATED, g_PrintFlag);
+            goto cleanup;
         }
-        char *nptr, *endptr;
-        int intval;
-        float floatval;
-        switch (attr->type) {
-            case INTEGER:
-                intval = strtol(argv[i + 1], &nptr, 10);
-                convertIntToByteArray(intval, recPtr + attr->offset);
-                break;
-            case FLOAT:
-                floatval = strtof(argv[i + 1], &nptr);
-                endptr = argv[i + 1] + (strlen(argv[i + 1] - 1));
-                convertFloatToByteArray(floatval, recPtr + attr->offset);
-                break;
-            case STRING:
-                strncpy(recPtr + attr->offset, argv[i + 1], attr->length);
-                break;
-            default:
-                break;
+        provided[attr->position] = 1;
+        if (EncodeTextValue(
+                attr,
+                argv[i + 1],
+                recPtr + attr->offset,
+                &isNull) != OK) {
+            result = NOTOK;
+            goto cleanup;
+        }
+        if (isNull == TRUE) {
+            if (g_CatCache[relNum].hasNullBitmap == FALSE) {
+                result = ErrorMsgs(LEGACY_NULL_UNSUPPORTED, g_PrintFlag);
+                goto cleanup;
+            }
+            if (attr->notNull == TRUE) {
+                result = ErrorMsgs(NOT_NULL_CONSTRAINT_VIOLATION, g_PrintFlag);
+                goto cleanup;
+            }
+            RecordSetAttributeNull(&g_CatCache[relNum], recPtr, attr);
         }
     }
 
-    //Duplicate checking done in InsertRec
-    return InsertRec(relNum, recPtr);
+    for (attr = g_CatCache[relNum].attrList; attr != NULL; attr = attr->next) {
+        if (provided[attr->position] != 0) {
+            continue;
+        }
+        if (g_CatCache[relNum].hasNullBitmap == FALSE) {
+            result = ErrorMsgs(INSUFFICIENT_ATTRS, g_PrintFlag);
+            goto cleanup;
+        }
+        if (attr->notNull == TRUE) {
+            result = ErrorMsgs(NOT_NULL_CONSTRAINT_VIOLATION, g_PrintFlag);
+            goto cleanup;
+        }
+        RecordSetAttributeNull(&g_CatCache[relNum], recPtr, attr);
+    }
+
+    result = InsertRec(relNum, recPtr);
+
+cleanup:
+    free(provided);
+    free(recPtr);
+    return result;
 }
