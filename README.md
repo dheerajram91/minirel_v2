@@ -1,15 +1,45 @@
-MINIREL
-=======
+MINIREL v2
+===========
 
-Minirel - A simple RDBMS
+MINIREL v2 modernizes the original 2014 educational relational database into a
+Windows-compatible, transactional, MCP-enabled database while retaining its
+small C codebase and fixed-page storage model.
 
-A simplified single-user relational database system, called MINIREL. 
-The MINIREL project involves writing code for both the logical layer and 
-the physical layer of a Database Management System.
+The original MINIREL was created as coursework for Database Management Systems
+(E0261, August 2014). Its original specification remains in
+`doc/minirel-doc.pdf`; this fork preserves that history while adding substantial
+new database and tooling capabilities.
 
-Done as part of course work for Database Management Systems (E0261) (2014 August Session)
+Current capabilities
+--------------------
 
-For complete specifications see doc/minirel-doc.pdf
+| Area | Current support |
+| --- | --- |
+| Platform | Native Windows GCC build, with POSIX-compatible code paths |
+| Relational integrity | `UNIQUE`, `NOT NULL`, single-column `PRIMARY KEY`, real `NULL`, strict numeric/string validation |
+| Data operations | Insert, delete, projection, selection, joins, binary load, and native multi-row `update` |
+| Isolation | Serializable explicit transactions using strict table-level two-phase locking |
+| Atomicity | `begin`, `commit`, `rollback`, failure-state handling, and file before-images |
+| Durability | Checksummed physical WAL, WAL-before-data ordering, startup redo/undo, torn-tail handling, and create/drop recovery |
+| Integration | Five broad MCP tools, schema/database discovery, transaction execution, and a help prompt |
+| Validation | 46 automated tests covering MCP, constraints, NULL, concurrency, transactions, updates, storage layout, and crash recovery |
+
+The visual [`minirel_progress.html`](minirel_progress.html) report provides a
+milestone-by-milestone architecture and ACID overview.
+
+Quick start
+-----------
+
+```powershell
+winget install --id BrechtSanders.WinLibs.POSIX.UCRT --exact
+npm install
+npm run build:minirel
+npm test
+npm run minirel
+```
+
+Databases created through the npm CLI or MCP server are stored under the
+Git-ignored `DB` directory by default.
 
 Running on Windows
 ------------------
@@ -21,7 +51,7 @@ script supports Windows with GCC:
 winget install --id BrechtSanders.WinLibs.POSIX.UCRT --exact
 npm install
 npm run build:minirel
-Get-Content query\smoke.query | .\run\minirel.exe
+Get-Content query\smoke.query | .\run\minirel.exe # optional smoke script
 ```
 
 Run `npm run minirel` for the interactive `query >` prompt. By default, the CLI
@@ -292,7 +322,6 @@ For example, create a database and its initial tables with
 
 ```json
 {
-  "workingDirectory": "C:\\databases",
   "commands": [
     "createdb school",
     "opendb school",
@@ -309,7 +338,6 @@ roll back:
 ```json
 {
   "database": "school",
-  "workingDirectory": "C:\\databases",
   "commands": [
     "insert into students (id = 1, name = \"Ada\")",
     "insert into courses (id = 10, title = \"Database Systems\")"
@@ -363,3 +391,39 @@ automatically:
 
 Do not separately keep `npm run mcp` running when using VS Code. VS Code owns
 the server's stdin/stdout connection and launches the process itself.
+
+Validation
+----------
+
+Build and run the complete automated suite with:
+
+```powershell
+npm run build:minirel
+npm test
+```
+
+The current suite contains 46 tests, including deterministic crash injection at
+WAL force, data-page write, durable commit, and recovery boundaries. Individual
+suites can be run with Node's test runner, for example:
+
+```powershell
+node --test test\null-and-strict-writes.test.mjs
+node --test test\transaction.test.mjs
+node --test test\wal-recovery.test.mjs
+node --test test\mcp-server.test.mjs
+```
+
+Current limitations
+-------------------
+
+- WAL protection currently applies to explicit transactions; commands outside
+  `begin`/`commit` are not yet implicit WAL-backed autocommit transactions.
+- WAL checkpointing occurs during exclusive startup recovery; there is no
+  concurrent checkpoint process or WAL-size threshold yet.
+- Whole-file backups remain as a safety net for transactional schema/catalog
+  lifecycle operations.
+- `DEFAULT`, `CHECK`, and foreign-key constraints are not yet implemented.
+- Locking is serializable at table granularity for cooperating MINIREL
+  processes; deadlocks use a five-second timeout rather than a wait-for graph.
+- Native indexes, query planning, `EXPLAIN`, and online schema evolution remain
+  future work.

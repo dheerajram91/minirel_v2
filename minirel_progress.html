@@ -360,13 +360,13 @@
         cross-process concurrency, serializable transactions, native updates, real NULL values,
         strict writes, and crash-safe WAL recovery.
       </p>
-      <p class="hero-note">Progress captured September 18, 2026 &middot; Repository: <code>C:\Users\dhram\minirel</code></p>
+      <p class="hero-note">Progress captured September 24, 2026 &middot; Repository: <code>C:\Users\dhram\minirel</code></p>
     </div>
   </header>
 
   <section class="metrics" aria-label="Progress metrics">
     <div class="metric success">
-      <div class="metric-value">44/44</div>
+      <div class="metric-value">46/46</div>
       <div class="metric-label">Automated tests passing</div>
     </div>
     <div class="metric">
@@ -567,6 +567,10 @@
       <div class="milestone-head"><span class="milestone-number">17</span><span class="milestone-title">Verified legacy data and stale-WAL recovery</span><span class="badge done">Done</span></div>
       <p>Opened a copy of the pre-existing <code>school</code> database and recovered all five student rows without changing the original. Recovery now safely tolerates a missing stale backup only when WAL proves that resource was never mutated.</p>
     </article>
+    <article class="milestone">
+      <div class="milestone-head"><span class="milestone-number">18</span><span class="milestone-title">Isolated runtime databases from source control</span><span class="badge done">Done</span></div>
+      <p>CLI and MCP database creation now defaults to the repository's ignored <code>DB</code> directory. Repository-root MCP overrides normalize to the same location, and each database also contains a defensive local <code>.gitignore</code>.</p>
+    </article>
   </section>
 
   <h2>Current ACID position</h2>
@@ -716,7 +720,7 @@ where (id = 2 and score &gt;= 80);</code></pre>
     </article>
     <article class="card">
       <div class="status-row"><span class="dot"></span><h3>Full test suite</h3></div>
-      <p><strong>44 tests passing</strong> across MCP, NULL semantics, strict writes, constraints, concurrency, transactions, updates, and WAL.</p>
+      <p><strong>46 tests passing</strong> across MCP, NULL semantics, strict writes, constraints, concurrency, transactions, updates, storage layout, and WAL.</p>
     </article>
     <article class="card">
       <div class="status-row"><span class="dot"></span><h3>Crash recovery</h3></div>
